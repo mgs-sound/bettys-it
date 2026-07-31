@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Betty's It</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#000;color:#ddd;font-family:Georgia,'Times New Roman',serif;-webkit-user-select:none;user-select:none;touch-action:none;overscroll-behavior:none}
+canvas.game{position:fixed;inset:0;display:block}
+.hidden{display:none!important}
+.screen{position:fixed;inset:0;background:radial-gradient(ellipse at center,#1a0505 0%,#000 75%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;z-index:30;text-align:center;padding:20px}
+.screen h1{font-size:clamp(40px,9vw,96px);color:#c21f1f;letter-spacing:.06em;text-shadow:0 0 24px #700;font-style:italic}
+.byline{font-size:clamp(16px,3vw,26px);color:#caa}
+.phones{color:#887;font-size:clamp(13px,2.2vw,18px)}
+button{font-family:inherit;font-size:clamp(16px,2.6vw,22px);padding:12px 28px;border-radius:10px;border:1px solid #a33;background:#2a0d0d;color:#ebb;cursor:pointer}
+button:active{background:#511}
+#beginBtn{animation:pulse 1.6s infinite}
+@keyframes pulse{50%{transform:scale(1.06);box-shadow:0 0 18px #a22}}
+#hud{position:fixed;inset:0;pointer-events:none;z-index:20}
+#timer{position:absolute;top:calc(8px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);font-size:34px;color:#e8e0c8;text-shadow:0 0 8px #000;font-variant-numeric:tabular-nums}
+#timer.danger{color:#ff4d4d;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.45}}
+#hint{position:absolute;top:calc(10px + env(safe-area-inset-top));left:12px;max-width:36vw;background:#000a;border:1px solid #433;border-radius:8px;padding:8px 12px;font-size:15px;color:#d8c9a8;line-height:1.35}
+#tasksBtn{position:absolute;top:calc(10px + env(safe-area-inset-top));right:12px;pointer-events:auto;font-size:15px;padding:8px 14px}
+#checklist{position:absolute;top:calc(56px + env(safe-area-inset-top));right:12px;background:#000d;border:1px solid #433;border-radius:10px;padding:12px 16px;max-height:70vh;overflow:auto;pointer-events:auto;max-width:44vw}
+#checklist h3{color:#c99;font-size:15px;margin-bottom:6px}
+#checklist li{font-size:14px;margin:4px 0 4px 18px;color:#cbb}
+#checklist li.done{color:#6a6;text-decoration:line-through}
+#checklist li.current{color:#fd9;font-weight:bold}
+#interactBtn{position:absolute;right:26px;bottom:90px;pointer-events:auto;font-size:19px;padding:16px 26px;border-radius:50px;background:#12240fd9;border-color:#4a7d3a;color:#cfc}
+#minimap{position:absolute;left:12px;bottom:12px;border:1px solid #544;border-radius:6px;background:#000c;image-rendering:pixelated;width:174px;height:126px}
+#toast{position:absolute;left:50%;bottom:20vh;transform:translateX(-50%);background:#000d;border:1px solid #653;border-radius:10px;padding:10px 18px;font-size:17px;color:#ecd9a0;max-width:70vw;text-align:center}
+#vignette{position:absolute;inset:0;pointer-events:none}
+#lockHint{position:absolute;left:50%;bottom:8vh;transform:translateX(-50%);color:#998;font-size:15px;background:#0009;padding:6px 12px;border-radius:8px}
+.stick{position:fixed;border:2px solid #ffffff2e;border-radius:50%;pointer-events:none;z-index:25;background:#ffffff10}
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="hud" class="hidden">
+  <div id="timer">5:00</div>
+  <div id="hint"></div>
+  <button id="tasksBtn">Tasks ▾</button>
+  <div id="checklist" class="hidden"><h3>Your 10 Tasks</h3><ol id="taskList"></ol></div>
+  <button id="interactBtn" class="hidden">Interact</button>
+  <canvas id="minimap" class="hidden" width="145" height="105"></canvas>
+  <div id="toast" class="hidden"></div>
+  <div id="vignette"></div>
+  <div id="lockHint" class="hidden">Click to look around · WASD to move · E to interact</div>
+</div>
+
+<div id="title" class="screen">
+  <h1 id="titleText">BETTY'S IT</h1>
+  <div class="byline">Created by Sophie Schmid</div>
+  <div class="phones">🎧 Headphones recommended</div>
+  <button id="beginBtn">Tap to begin</button>
+</div>
+
+<div id="gameover" class="screen hidden">
+  <h1>BETTY GOT YOU</h1>
+  <div class="byline">You disappear forever.</div>
+  <button id="retryBtn">Try again</button>
+</div>
+
+<div id="victory" class="screen hidden">
+  <h1 style="color:#d9b64a;text-shadow:0 0 24px #870">YOU ESCAPED!</h1>
+  <div class="byline">You got away with Betty's knife. She is FURIOUS.</div>
+  <button id="againBtn">Play again</button>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
