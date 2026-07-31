@@ -104,12 +104,14 @@ class Game {
     this.player.enabled = false;
     this.betty.onCaptured(this.player.pos);   // attack pose + WHACK effect
     this.audio.scream();
+    this.audio.fadeOutMusic(1.2);             // fade the bed across the grab cinematic
     hud.hideInteract();
   }
 
   victory() {
     if (this.state !== 'playing') return;
     this.state = 'won';
+    this.audio.fadeOutMusic(0.8);
     this.audio.stopAll();
     this.audio.chime();
     document.exitPointerLock?.();

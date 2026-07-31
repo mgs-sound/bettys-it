@@ -14,13 +14,36 @@ function synth(ctx, dur, fn) {
 
 let musicBuffer = null, musicTried = false;
 
+// Drives any THREE.Audio's volume toward a base level, with a fast dip and a
+// slow recovery — reusable for anything that should get out of the scream's
+// way (music now; heartbeat/rumble later if the mix wants it).
+export class Ducker {
+  constructor(audio, { base = 0.4, duckTo = 0.15, duckTime = 0.15, restoreTime = 1 } = {}) {
+    this.audio = audio;
+    this.base = base; this.duckTo = duckTo;
+    this.downRate = (base - duckTo) / duckTime;
+    this.upRate = (base - duckTo) / restoreTime;
+    this.target = base;
+  }
+
+  duck(on) { this.target = on ? this.duckTo : this.base; }
+
+  update(dt) {
+    const v = this.audio.getVolume();
+    if (Math.abs(this.target - v) < 0.001) return;
+    const rate = this.target < v ? this.downRate : this.upRate;
+    this.audio.setVolume(v + Math.sign(this.target - v) * Math.min(Math.abs(this.target - v), rate * dt));
+  }
+}
+
 export class GameAudio {
   constructor(listener) {
     this.listener = listener;
     this.ctx = listener.context;
     this.heartTimer = 0;
     this.heartLevel = 0;
-    this.musicTarget = 0.3;
+    this.musicDuck = null;
+    this.musicFading = false;
     this.#makeBuffers();
   }
 
@@ -104,12 +127,11 @@ export class GameAudio {
     if (on) {
       if (!this.chaseSnd.isPlaying) this.chaseSnd.play();
       if (this.rumble?.isPlaying) this.rumble.pause();
-      this.musicTarget = 0.08;
     } else {
       if (this.chaseSnd.isPlaying) this.chaseSnd.stop();
       this.startRumble();
-      this.musicTarget = 0.3;
     }
+    this.musicDuck?.duck(on);   // the scream owns the mix while she hunts
   }
 
   #global(buf, vol) {
@@ -136,8 +158,24 @@ export class GameAudio {
     if (!musicBuffer) return;
     this.music = new THREE.Audio(this.listener);
     this.music.setBuffer(musicBuffer);
-    this.music.setLoop(true); this.music.setVolume(0.3);
+    this.music.setLoop(true);            // buffer looping is gapless
+    this.music.setVolume(0);             // eases up to the bed level via the ducker
     this.music.play();
+    this.musicDuck = new Ducker(this.music, { base: 0.4, duckTo: 0.15, duckTime: 0.15, restoreTime: 1 });
+  }
+
+  // quick fade for the game-over / victory screens, then a real stop
+  fadeOutMusic(seconds = 0.8) {
+    if (!this.music?.isPlaying || this.musicFading) return;
+    this.musicFading = true;
+    this.musicDuck = null;               // hand the volume over to the ramp
+    const gain = this.music.gain.gain;
+    const now = this.ctx.currentTime;
+    gain.cancelScheduledValues(now);
+    gain.setValueAtTime(gain.value, now);
+    gain.linearRampToValueAtTime(0.0001, now + seconds);
+    const m = this.music;
+    setTimeout(() => { try { if (m.isPlaying) m.stop(); } catch { /* already stopped */ } }, seconds * 1000 + 100);
   }
 
   setHeart(level) { this.heartLevel = level; }
@@ -150,16 +188,15 @@ export class GameAudio {
         this.#global(this.bufs.heart, 0.15 + 0.55 * this.heartLevel);
       }
     }
-    if (this.music) {
-      const v = this.music.getVolume();
-      this.music.setVolume(v + (this.musicTarget - v) * Math.min(1, dt * 3));
-    }
+    this.musicDuck?.update(dt);
   }
 
   stopAll() {
-    for (const a of [this.rumble, this.chaseSnd, this.screamSnd, this.music, this.alarmSnd]) {
+    for (const a of [this.rumble, this.chaseSnd, this.screamSnd, this.alarmSnd]) {
       try { if (a?.isPlaying) a.stop(); } catch { /* already stopped */ }
     }
     this.alarmSnd = null;
+    // music: if a fade is running its own stop is scheduled; otherwise cut it
+    if (!this.musicFading) { try { if (this.music?.isPlaying) this.music.stop(); } catch { /* fine */ } }
   }
 }
