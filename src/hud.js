@@ -76,7 +76,7 @@ export function drawMinimap(player, betty, chasing) {
     else if (ch === 'h') g.fillStyle = '#3a3430';
     else if (ch === 'D') {
       const d = MAP.doorAt(c, r);
-      g.fillStyle = d && d.openT > 0.5 ? '#5a8a4a' : '#a04438';
+      g.fillStyle = d && d.openF > 0.5 ? '#5a8a4a' : '#a04438';
     } else g.fillStyle = '#4a3a2c';
     g.fillRect(c * SCALE, r * SCALE, SCALE, SCALE);
   }

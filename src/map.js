@@ -64,7 +64,7 @@ function makeDoors() {
     const d = {
       c, r, vertical,
       locked: (c === 3 && r === 5),                 // guest bedroom starts locked
-      propped: false, openT: 0, target: 0, mesh: null,
+      propped: false, openT: 0, openF: 0, target: 0, mesh: null,
     };
     doors.push(d); doorsByKey.set(c + ',' + r, d);
   }
@@ -73,7 +73,7 @@ function makeDoors() {
 function solidForPlayer(c, r) {
   const ch = cellChar(c, r);
   if (ch === '#') return true;
-  if (ch === 'D') { const d = doorAt(c, r); return d && d.openT < 0.5; }
+  if (ch === 'D') { const d = doorAt(c, r); return d && d.openF < 0.3; }  // blocks until ~30% swung
   return false;
 }
 
@@ -101,7 +101,7 @@ export function losBlocked(ax, az, bx, bz) {
     if (ch === '#') return { blocked: true, byDoor: false };
     if (ch === 'D') {
       const d = doorAt(c, r);
-      if (d && d.openT < 0.5) return { blocked: true, byDoor: true };
+      if (d && d.openF < 0.5) return { blocked: true, byDoor: true };
     }
   }
   return { blocked: false, byDoor: false };
@@ -111,7 +111,7 @@ export function losBlocked(ax, az, bx, bz) {
 export function passableForBetty(c, r) {
   const ch = cellChar(c, r);
   if (ch === '#') return false;
-  if (ch === 'D') { const d = doorAt(c, r); return !d || d.openT > 0.5 || d.propped; }
+  if (ch === 'D') { const d = doorAt(c, r); return !d || d.openF > 0.5 || d.propped; }
   return true;
 }
 
@@ -215,35 +215,44 @@ export function buildMap(scene) {
   });
   scene.add(walls);
 
-  // door slabs — slide up into the ceiling when opened
-  const doorH = WALL_H - 0.3;
+  // door slabs — hinged at one edge of the frame, swinging into the room
+  const doorH = WALL_H - 0.3, doorW = CELL * 0.98;
   for (const d of doors) {
-    let mats;
+    let mats, geo;
     if (TEX.door) {
       mats = {
         doorMat: cutoutMaterial('door'),
         lockedMat: cutoutMaterial('door', { color: 0x8a8ab8 }),
         propMat: cutoutMaterial('door', { color: 0xa8e0a0 }),
       };
-      d.mesh = new THREE.Mesh(new THREE.PlaneGeometry(CELL * 0.98, doorH),
-        d.locked ? mats.lockedMat : mats.doorMat);
-      if (d.vertical) d.mesh.rotation.y = Math.PI / 2;
+      geo = new THREE.PlaneGeometry(doorW, doorH);
     } else {
       mats = {
         doorMat: new THREE.MeshLambertMaterial({ color: 0x6b4a2a }),
         lockedMat: new THREE.MeshLambertMaterial({ color: 0x50331c }),
         propMat: new THREE.MeshLambertMaterial({ color: 0x5a6b3a }),
       };
-      const g = d.vertical
-        ? new THREE.BoxGeometry(0.35, doorH, CELL * 0.98)
-        : new THREE.BoxGeometry(CELL * 0.98, doorH, 0.35);
-      d.mesh = new THREE.Mesh(g, d.locked ? mats.lockedMat : mats.doorMat);
+      geo = new THREE.BoxGeometry(doorW, doorH, 0.15);
     }
+    geo.translate(doorW / 2, 0, 0);              // hinge at the local origin
+    d.mesh = new THREE.Mesh(geo, d.locked ? mats.lockedMat : mats.doorMat);
     d.mats = mats;
+    d.pivot = new THREE.Group();
     const { x, z } = cellToWorld(d.c, d.r);
-    d.baseY = doorH / 2;
-    d.mesh.position.set(x, d.baseY, z);
-    scene.add(d.mesh);
+    if (d.vertical) {
+      // slab runs N-S; hinge on the north jamb, swing away from any hallway to the east
+      d.pivot.position.set(x, doorH / 2, z - CELL * 0.49);
+      d.baseRot = -Math.PI / 2;
+      d.swing = cellChar(d.c + 1, d.r) === 'h' ? -1 : 1;
+    } else {
+      // slab runs E-W; hinge on the west jamb, swing away from the hallway side
+      d.pivot.position.set(x - CELL * 0.49, doorH / 2, z);
+      d.baseRot = 0;
+      d.swing = cellChar(d.c, d.r + 1) === 'h' ? 1 : -1;   // hall south -> swing north
+    }
+    d.pivot.rotation.y = d.baseRot;
+    d.pivot.add(d.mesh);
+    scene.add(d.pivot);
   }
 
   // windows on exterior-facing room walls
@@ -274,12 +283,14 @@ export function buildMap(scene) {
   return { lamps };
 }
 
+const SWING_ANGLE = THREE.MathUtils.degToRad(100);
 export function updateDoors(dt) {
   for (const d of doors) {
     const to = d.propped ? 1 : d.target;
-    if (Math.abs(d.openT - to) > 0.001) {
-      d.openT += Math.sign(to - d.openT) * Math.min(Math.abs(to - d.openT), dt * 1.8);
-      d.mesh.position.y = d.baseY + d.openT * (WALL_H - 0.5);
+    if (Math.abs(d.openT - to) > 0.0005) {
+      d.openT += Math.sign(to - d.openT) * Math.min(Math.abs(to - d.openT), dt / 0.4);
+      d.openF = 1 - (1 - d.openT) ** 3;          // ease-out on the swing
+      d.pivot.rotation.y = d.baseRot + d.swing * SWING_ANGLE * d.openF;
     }
   }
 }

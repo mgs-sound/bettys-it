@@ -17,6 +17,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.domElement.className = 'game';
 document.body.appendChild(renderer.domElement);
+window.renderer = renderer;   // debug handle: lets console playtests force a frame
 
 // Sophie's title lettering drops in automatically when the file exists
 {
