@@ -4,7 +4,7 @@
 // between her facing direction and the camera (8 sectors, side art mirrors).
 import * as THREE from 'three';
 import * as MAP from './map.js';
-import { TEX, makeCanvasTexture } from './assets.js';
+import { TEX, makeCanvasTexture, bottomPadFraction } from './assets.js';
 
 const ROAM_SPEED = 2.0, CHASE_SPEED = 3.4;   // player is 4.2 — you win footraces
 const SEE_DIST = 13, GRAB_DIST = 1.55;
@@ -42,8 +42,10 @@ export class Betty {
 
     this.views = this.#buildViews();
     this.group = new THREE.Group();
+    const geo = new THREE.PlaneGeometry(1, 1);
+    geo.translate(0, 0.5, 0);                    // pivot at her feet
     this.sprite = new THREE.Mesh(
-      new THREE.PlaneGeometry(1, 1),
+      geo,
       new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }),
     );
     this.group.add(this.sprite);
@@ -61,7 +63,7 @@ export class Betty {
       if (!t) return null;
       const m = t.clone();                     // horizontal mirror for left-facing sectors
       m.repeat.x = -1; m.offset.x = 1; m.needsUpdate = true;
-      return { t, m, a: t.userData.aspect || 0.6 };
+      return { t, m, a: t.userData.aspect || 0.6, pad: bottomPadFraction(t) };
     };
     if (get('front')) {
       const front = mk('front');
@@ -79,8 +81,8 @@ export class Betty {
       };
     }
     // no art yet — canvas placeholders everywhere
-    const roam = { t: placeholderFace(false), a: 128 / 192 };
-    const chase = { t: placeholderFace(true), a: 128 / 192 };
+    const roam = { t: placeholderFace(false), a: 128 / 192, pad: 0 };
+    const chase = { t: placeholderFace(true), a: 128 / 192, pad: 0 };
     roam.m = roam.t; chase.m = chase.t;
     return { front: roam, f34: roam, side: roam, b34: roam, back: roam, walk: [chase, chase], idle: roam, attack: chase };
   }
@@ -89,8 +91,8 @@ export class Betty {
     const map = mirror ? entry.m : entry.t;
     const mat = this.sprite.material;
     if (mat.map !== map) { mat.map = map; mat.needsUpdate = true; }
-    this.sprite.scale.set(SPRITE_H * entry.a, SPRITE_H, 1);
-    this.sprite.position.y = SPRITE_H / 2;
+    this.sprite.scale.set(SPRITE_H * entry.a, SPRITE_H, 1);   // grows up from the feet pivot
+    this.sprite.position.y = -(entry.pad || 0) * SPRITE_H;    // cancel transparent padding below her shoes
   }
 
   // pick a directional view from the angle between facing and the camera

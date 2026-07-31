@@ -3,7 +3,7 @@
 // object can be used out of order.
 import * as THREE from 'three';
 import * as MAP from './map.js';
-import { TEX, cutoutMaterial, makeLabelSprite } from './assets.js';
+import { TEX, cutoutMaterial, makeLabelSprite, bottomPadFraction } from './assets.js';
 import * as hud from './hud.js';
 
 const REACH = 2.3;
@@ -37,17 +37,20 @@ export function createTasks(game, scene) {
       const mat = def.slot === 'knife'
         ? new THREE.MeshBasicMaterial({ map: slotTex, transparent: true, depthWrite: false, side: THREE.DoubleSide })
         : cutoutMaterial(def.slot);
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+      const geo = new THREE.PlaneGeometry(w, h);
+      geo.translate(0, h / 2, 0);                         // pivot at the base
+      const plane = new THREE.Mesh(geo, mat);
+      const sink = bottomPadFraction(slotTex) * h;        // cancel transparent padding under the art
       if (def.slot === 'knife') plane.renderOrder = 15;   // feathered glow: blend last
       if (def.kind === 'wall') {
-        const [x, y, z, rotY] = def.wall;
-        plane.position.set(x, y, z);
+        const [x, baseY, z, rotY] = def.wall;             // baseY = where the bottom edge sits
+        plane.position.set(x, baseY - sink, z);
         plane.rotation.y = rotY;
         scene.add(plane);
         inter.push({ c, r, mesh: plane, kind: 'wall', ...defApi(def) });
         return;
       }
-      plane.position.y = def.kind === 'pickup' ? 1.0 : h / 2;
+      plane.position.y = def.kind === 'pickup' ? 0.75 : -sink;   // pickups hover, stands touch down
       g.add(plane);
       g.userData = { plane, baseY: plane.position.y, phase: Math.random() * 6.28, kind: def.kind };
     } else {
@@ -92,7 +95,7 @@ export function createTasks(game, scene) {
     act: () => done(1, 'Snack! You feel ready to outrun Betty later.'),
   });
   makeItem('Oven', 0x333333, 14, 1, {
-    slot: 'oven', kind: 'wall', wall: [29, 1.5, northWallZ, 0], h: 2.2, ph: 1.1, keep: true,
+    slot: 'oven', kind: 'wall', wall: [29, 0, northWallZ, 0], h: 2.2, ph: 1.1, keep: true,
     prompt: 'Turn off the oven', active: () => !T[2].done,
     act: () => { done(2, 'Oven off. The cookies are (mostly) saved.'); game.stopAlarm(); },
   });
@@ -112,7 +115,7 @@ export function createTasks(game, scene) {
     act: () => { S.cookieStolen = true; done(5, "You stole a cookie! Betty will stop to count them later…"); },
   });
   makeItem('Back Gate', 0x8a8a8a, 24, 19, {
-    slot: 'back_gate', kind: 'wall', wall: [49, 1.5, southWallZ, Math.PI], h: 2.7, ph: 2.2, keep: true,
+    slot: 'back_gate', kind: 'wall', wall: [49, 0, southWallZ, Math.PI], h: 2.7, ph: 2.2, keep: true,
     prompt: 'Unlock the back gate', active: () => !T[6].done,
     act: () => { S.gateUnlocked = true; done(6, 'Back gate unlocked. Your escape route is ready.'); },
   });
@@ -151,7 +154,7 @@ export function createTasks(game, scene) {
     },
   });
   makeItem('Front Door', 0x50331c, 11, 19, {
-    slot: 'door', kind: 'wall', wall: [23, 1.5, southWallZ, Math.PI], h: 2.9, ph: 2.4, keep: true,
+    slot: 'door', kind: 'wall', wall: [23, 0, southWallZ, Math.PI], h: 2.9, ph: 2.4, keep: true,
     prompt: 'Try the front door', active: () => true,
     act: () => { game.audio.thud(); hud.toast("Nailed shut. Betty's rules. The BACK GATE is the way out."); },
   });

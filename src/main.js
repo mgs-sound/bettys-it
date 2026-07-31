@@ -195,6 +195,8 @@ class Game {
   }
 
   dispose() {
+    this.state = 'over';        // a disposed game must never accept interactions
+    this.player.dispose();
     this.audio.stopAll();
     this.scene.traverse((o) => {
       o.geometry?.dispose?.();

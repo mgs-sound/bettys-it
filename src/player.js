@@ -23,28 +23,33 @@ export class Player {
   }
 
   #bind(canvas) {
+    // every listener is tied to this controller so dispose() detaches them all —
+    // otherwise each retry stacks another full set of handlers
+    this.ac = new AbortController();
+    const sig = { signal: this.ac.signal };
+
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Tab') e.preventDefault();
       this.keys.add(e.code);
       if (e.code === 'KeyE') this.onInteractKey?.();
-    });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    }, sig);
+    window.addEventListener('keyup', (e) => this.keys.delete(e.code), sig);
 
     if (!IS_TOUCH) {
       canvas.addEventListener('click', () => {
         if (this.enabled && document.pointerLockElement !== canvas) {
           canvas.requestPointerLock?.().catch?.(() => {});
         }
-      });
+      }, sig);
       canvas.addEventListener('mousedown', () => {
         if (document.pointerLockElement === canvas) this.onInteractKey?.();
-      });
+      }, sig);
       window.addEventListener('mousemove', (e) => {
         if (document.pointerLockElement === canvas) {
           this.lookDX += e.movementX * 0.0023;
           this.lookDY += e.movementY * 0.0023;
         }
-      });
+      }, sig);
     } else {
       this.#makeStickUI();
       canvas.addEventListener('touchstart', (e) => {
@@ -57,7 +62,7 @@ export class Player {
             this.lookTouch = { id: t.identifier, x: t.clientX, y: t.clientY };
           }
         }
-      }, { passive: false });
+      }, { passive: false, ...sig });
       canvas.addEventListener('touchmove', (e) => {
         e.preventDefault();
         for (const t of e.changedTouches) {
@@ -70,16 +75,22 @@ export class Player {
             this.lookTouch.x = t.clientX; this.lookTouch.y = t.clientY;
           }
         }
-      }, { passive: false });
+      }, { passive: false, ...sig });
       const end = (e) => {
         for (const t of e.changedTouches) {
           if (this.moveTouch?.id === t.identifier) { this.moveTouch = null; this.#stickHide(); }
           if (this.lookTouch?.id === t.identifier) this.lookTouch = null;
         }
       };
-      canvas.addEventListener('touchend', end);
-      canvas.addEventListener('touchcancel', end);
+      canvas.addEventListener('touchend', end, sig);
+      canvas.addEventListener('touchcancel', end, sig);
     }
+  }
+
+  dispose() {
+    this.ac.abort();
+    this.stickBase?.remove();
+    this.stickKnobEl?.remove();
   }
 
   #makeStickUI() {

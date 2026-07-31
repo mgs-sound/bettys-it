@@ -31,6 +31,28 @@ export function preloadTextures() {
   return preloading;
 }
 
+// fraction of a texture's height that is transparent below the artwork —
+// used to sink floor-standing sprites so their feet actually touch the floor
+const padCache = new Map();
+export function bottomPadFraction(tex) {
+  if (!tex?.image?.width) return 0;
+  if (padCache.has(tex)) return padCache.get(tex);
+  const img = tex.image;
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height).data;
+  let pad = 0;
+  outer: for (let y = c.height - 1; y >= 0; y--) {
+    for (let x = 0; x < c.width; x++) {
+      if (d[(y * c.width + x) * 4 + 3] > 30) { pad = (c.height - 1 - y) / c.height; break outer; }
+    }
+  }
+  padCache.set(tex, pad);
+  return pad;
+}
+
 // seamless tile: repeat set from the world-space size of the mesh it covers
 export function tileTexture(slot, worldW, worldH, unitsPerTile) {
   const base = TEX[slot];
