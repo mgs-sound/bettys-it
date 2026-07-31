@@ -2,7 +2,7 @@
 // One cell = 2m. Halls form a ring around the center block (library + attic);
 // rooms hang off the north and south sides.
 import * as THREE from 'three';
-import { makeLabelSprite } from './assets.js';
+import { TEX, tileTexture, cutoutMaterial, makeLabelSprite } from './assets.js';
 
 export const CELL = 2;
 export const GRID = [
@@ -141,12 +141,29 @@ export function findPath(c0, r0, c1, r1) {
 }
 
 // ---- Geometry -----------------------------------------------------------
+const WALL_EPS = 0.02;   // wall-mounted planes float this far off the wall face
+
+// small plane hung on a wall (windows, portraits, wall props)
+export function wallPlane(scene, slot, x, y, z, rotY, h, wOverride) {
+  const mat = cutoutMaterial(slot);
+  if (!mat) return null;
+  const w = wOverride ?? h * (TEX[slot].userData.aspect || 1);
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  p.position.set(x, y, z);
+  p.rotation.y = rotY;
+  scene.add(p);
+  return p;
+}
+
 export function buildMap(scene) {
   makeDoors();
   const lamps = [];
 
-  const floorMat = new THREE.MeshLambertMaterial({ color: 0x2a211b });
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W * CELL, H * CELL), floorMat);
+  // floors: wood everywhere (halls), carpet patches in rooms
+  const woodTex = tileTexture('floor_wood', W * CELL, H * CELL, 1.5);
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(W * CELL, H * CELL),
+    new THREE.MeshLambertMaterial(woodTex ? { map: woodTex } : { color: 0x2a211b }));
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(W * CELL / 2, 0, H * CELL / 2);
   scene.add(floor);
@@ -157,37 +174,38 @@ export function buildMap(scene) {
   ceil.position.set(W * CELL / 2, WALL_H, H * CELL / 2);
   scene.add(ceil);
 
-  // room floor patches so each room reads differently in placeholder-land
-  const patchMat = new THREE.MeshLambertMaterial({ color: 0x3a2d22 });
   for (const rm of ROOMS) {
     const w = (rm.c1 - rm.c0 + 1) * CELL, d = (rm.r1 - rm.r0 + 1) * CELL;
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d), patchMat);
+    const carpetTex = tileTexture('floor_carpet', w, d, 1.5);
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d),
+      new THREE.MeshLambertMaterial(carpetTex ? { map: carpetTex } : { color: 0x3a2d22 }));
     p.rotation.x = -Math.PI / 2;
     p.position.set(rm.c0 * CELL + w / 2, 0.01, rm.r0 * CELL + d / 2);
     scene.add(p);
-    const label = makeLabelSprite(rm.name, { color: '#c9b489', scale: 1.6 });
+    const label = makeLabelSprite(rm.name, { color: '#c9b489', scale: 1.15 });
     const ctr = cellToWorld((rm.c0 + rm.c1) / 2, (rm.r0 + rm.r1) / 2);
-    label.position.set(ctr.x, 2.55, ctr.z);
+    label.position.set(ctr.x, 2.85, ctr.z);
     scene.add(label);
-    const lamp = new THREE.PointLight(0xffd9a0, 12, 16, 1.6);
+    const lamp = new THREE.PointLight(0xffd9a0, 24, 17, 1.6);
     lamp.position.set(ctr.x, 2.7, ctr.z);
-    lamp.userData.base = 12;
+    lamp.userData.base = 24;
     scene.add(lamp); lamps.push(lamp);
   }
   // hallway lamps
   for (const [c, r] of [[2, 6.5], [14, 6.5], [26, 6.5], [2, 14.5], [14, 14.5], [26, 14.5], [2, 10.5], [26, 10.5]]) {
     const { x, z } = cellToWorld(c, r);
-    const lamp = new THREE.PointLight(0xd9c9ff, 8, 13, 1.6);
+    const lamp = new THREE.PointLight(0xd9c9ff, 17, 14, 1.6);
     lamp.position.set(x, 2.8, z);
-    lamp.userData.base = 8;
+    lamp.userData.base = 17;
     scene.add(lamp); lamps.push(lamp);
   }
 
-  // walls as one instanced mesh
+  // walls as one instanced mesh — skull wallpaper at ~2 world units per tile
   const wallCells = [];
   for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (GRID[r][c] === '#') wallCells.push([c, r]);
+  const wallTex = tileTexture('wallpaper', CELL, WALL_H, 2);
   const wallGeo = new THREE.BoxGeometry(CELL, WALL_H, CELL);
-  const wallMat = new THREE.MeshLambertMaterial({ color: 0x4d3d33 });
+  const wallMat = new THREE.MeshLambertMaterial(wallTex ? { map: wallTex } : { color: 0x4d3d33 });
   const walls = new THREE.InstancedMesh(wallGeo, wallMat, wallCells.length);
   const m = new THREE.Matrix4();
   wallCells.forEach(([c, r], i) => {
@@ -198,26 +216,65 @@ export function buildMap(scene) {
   scene.add(walls);
 
   // door slabs — slide up into the ceiling when opened
-  const doorMat = new THREE.MeshLambertMaterial({ color: 0x6b4a2a });
-  const lockedMat = new THREE.MeshLambertMaterial({ color: 0x50331c });
-  const propMat = new THREE.MeshLambertMaterial({ color: 0x5a6b3a });
+  const doorH = WALL_H - 0.3;
   for (const d of doors) {
-    // door in an E-W wall spans X; door in a N-S wall spans Z
-    const g = d.vertical
-      ? new THREE.BoxGeometry(0.35, WALL_H - 0.3, CELL * 0.98)
-      : new THREE.BoxGeometry(CELL * 0.98, WALL_H - 0.3, 0.35);
-    d.mesh = new THREE.Mesh(g, d.locked ? lockedMat : doorMat);
-    d.mats = { doorMat, propMat, lockedMat };
+    let mats;
+    if (TEX.door) {
+      mats = {
+        doorMat: cutoutMaterial('door'),
+        lockedMat: cutoutMaterial('door', { color: 0x8a8ab8 }),
+        propMat: cutoutMaterial('door', { color: 0xa8e0a0 }),
+      };
+      d.mesh = new THREE.Mesh(new THREE.PlaneGeometry(CELL * 0.98, doorH),
+        d.locked ? mats.lockedMat : mats.doorMat);
+      if (d.vertical) d.mesh.rotation.y = Math.PI / 2;
+    } else {
+      mats = {
+        doorMat: new THREE.MeshLambertMaterial({ color: 0x6b4a2a }),
+        lockedMat: new THREE.MeshLambertMaterial({ color: 0x50331c }),
+        propMat: new THREE.MeshLambertMaterial({ color: 0x5a6b3a }),
+      };
+      const g = d.vertical
+        ? new THREE.BoxGeometry(0.35, doorH, CELL * 0.98)
+        : new THREE.BoxGeometry(CELL * 0.98, doorH, 0.35);
+      d.mesh = new THREE.Mesh(g, d.locked ? mats.lockedMat : mats.doorMat);
+    }
+    d.mats = mats;
     const { x, z } = cellToWorld(d.c, d.r);
-    d.baseY = (WALL_H - 0.3) / 2;
+    d.baseY = doorH / 2;
     d.mesh.position.set(x, d.baseY, z);
     scene.add(d.mesh);
   }
 
+  // windows on exterior-facing room walls
+  const northZ = CELL + WALL_EPS, southZ = (H - 1) * CELL - WALL_EPS;
+  const westX = CELL + WALL_EPS, eastX = (W - 1) * CELL - WALL_EPS;
+  for (const [x, z, rotY] of [
+    [8, northZ, 0], [24, northZ, 0], [40, northZ, 0], [50, northZ, 0],       // bedroom, kitchen, dining
+    [7, southZ, Math.PI], [38, southZ, Math.PI], [52, southZ, Math.PI],      // basement, garden
+    [westX, 5, Math.PI / 2], [westX, 37, Math.PI / 2],                       // bedroom W, basement W
+    [eastX, 6, -Math.PI / 2], [eastX, 37, -Math.PI / 2],                     // dining E, garden E
+  ]) wallPlane(scene, 'window', x, 1.8, z, rotY, 2.0);
+
+  // ancestor portraits down the hallways, irregular spacing + varied heights
+  const hallN = 6 * CELL + WALL_EPS;          // north hall's north wall face
+  const hallS = 16 * CELL - WALL_EPS;         // south hall's south wall face
+  const portraitSpots = [
+    ['portrait_1', 11, 1.8, hallN, 0], ['portrait_2', 18.5, 1.95, hallN, 0],
+    ['portrait_3', 31, 1.7, hallN, 0], ['portrait_1', 38, 1.85, hallN, 0],
+    ['portrait_2', 9.5, 1.75, hallS, Math.PI], ['portrait_3', 19, 1.9, hallS, Math.PI],
+    ['portrait_1', 30, 1.65, hallS, Math.PI], ['portrait_2', 39, 1.8, hallS, Math.PI],
+  ];
+  for (const [slot, x, y, z, rotY] of portraitSpots) wallPlane(scene, slot, x, y, z, rotY, 1.15);
+  wallPlane(scene, 'portrait_3', westX, 1.85, 17, Math.PI / 2, 1.15);
+  wallPlane(scene, 'portrait_1', westX, 1.7, 23.5, Math.PI / 2, 1.15);
+  wallPlane(scene, 'portrait_2', eastX, 1.9, 18.5, -Math.PI / 2, 1.15);
+  wallPlane(scene, 'portrait_3', eastX, 1.75, 25, -Math.PI / 2, 1.15);
+
   return { lamps };
 }
 
-export function updateDoors(dt, audio) {
+export function updateDoors(dt) {
   for (const d of doors) {
     const to = d.propped ? 1 : d.target;
     if (Math.abs(d.openT - to) > 0.001) {

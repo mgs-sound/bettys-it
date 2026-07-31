@@ -3,7 +3,7 @@
 // object can be used out of order.
 import * as THREE from 'three';
 import * as MAP from './map.js';
-import { makeLabelSprite } from './assets.js';
+import { TEX, cutoutMaterial, makeLabelSprite } from './assets.js';
 import * as hud from './hud.js';
 
 const REACH = 2.3;
@@ -24,18 +24,48 @@ export function createTasks(game, scene) {
 
   const S = { cookieStolen: false, gateUnlocked: false, hasKnife: false, dirty: true };
   const inter = [];
+  let animT = 0;
 
-  function makeItem(text, color, c, r, h = 0.5) {
+  // kind: 'pickup' floats/bobs/spins · 'stand' rests on the floor, billboards ·
+  // 'wall' hangs flat on a wall at def.wall = [x, y, z, rotY]
+  function makeItem(text, color, c, r, def) {
     const g = new THREE.Group();
-    const box = new THREE.Mesh(new THREE.BoxGeometry(0.55, h, 0.55), new THREE.MeshLambertMaterial({ color }));
-    box.position.y = h / 2;
-    const label = makeLabelSprite(text, { scale: 0.9 });
-    label.position.y = h + 0.55;
-    g.add(box, label);
+    const slotTex = def.slot && TEX[def.slot];
+    if (slotTex) {
+      const h = def.h ?? 0.6;
+      const w = h * (slotTex.userData.aspect || 1);
+      const mat = def.slot === 'knife'
+        ? new THREE.MeshBasicMaterial({ map: slotTex, transparent: true, depthWrite: false, side: THREE.DoubleSide })
+        : cutoutMaterial(def.slot);
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+      if (def.slot === 'knife') plane.renderOrder = 15;   // feathered glow: blend last
+      if (def.kind === 'wall') {
+        const [x, y, z, rotY] = def.wall;
+        plane.position.set(x, y, z);
+        plane.rotation.y = rotY;
+        scene.add(plane);
+        inter.push({ c, r, mesh: plane, kind: 'wall', ...defApi(def) });
+        return;
+      }
+      plane.position.y = def.kind === 'pickup' ? 1.0 : h / 2;
+      g.add(plane);
+      g.userData = { plane, baseY: plane.position.y, phase: Math.random() * 6.28, kind: def.kind };
+    } else {
+      const bh = def.ph ?? 0.5;
+      const box = new THREE.Mesh(new THREE.BoxGeometry(0.55, bh, 0.55), new THREE.MeshLambertMaterial({ color }));
+      box.position.y = bh / 2;
+      const label = makeLabelSprite(text, { scale: 0.9 });
+      label.position.y = bh + 0.55;
+      g.add(box, label);
+    }
     const { x, z } = MAP.cellToWorld(c, r);
     g.position.set(x, 0, z);
     scene.add(g);
-    return g;
+    inter.push({ c, r, mesh: g, kind: def.kind, ...defApi(def) });
+  }
+
+  function defApi(def) {
+    return { prompt: def.prompt, active: def.active, act: def.act, keep: def.keep };
   }
 
   function done(i, msg) {
@@ -45,66 +75,74 @@ export function createTasks(game, scene) {
     hud.toast(msg);
   }
 
-  function add(text, color, c, r, opts) {
-    const mesh = makeItem(text, color, c, r, opts.h ?? 0.5);
-    inter.push({ c, r, mesh, prompt: opts.prompt, active: opts.active, act: opts.act, keep: opts.keep });
-  }
-
   const bedroomDoor = MAP.doorAt(3, 5);
   const kitchenDoor = MAP.doorAt(11, 5);
   const gardenDoor = MAP.doorAt(24, 16);
+  const northWallZ = MAP.CELL + 0.04;                    // kitchen north wall face
+  const southWallZ = (MAP.H - 1) * MAP.CELL - 0.04;      // garden/entry south wall face
 
-  add('Key', 0xd9b64a, 2, 2, {
+  makeItem('Key', 0xd9b64a, 2, 2, {
+    slot: 'key', kind: 'pickup', h: 0.65,
     prompt: 'Take the key', active: () => !T[0].done,
     act: () => { bedroomDoor.locked = false; bedroomDoor.mesh.material = bedroomDoor.mats.doorMat; done(0, 'You found the key! The bedroom door is unlocked.'); },
   });
-  add('Snack', 0x69a84f, 9, 3, {
+  makeItem('Snack', 0x69a84f, 9, 3, {
+    slot: 'cookie', kind: 'pickup', h: 0.5,
     prompt: 'Grab the snack', active: () => !T[1].done,
     act: () => done(1, 'Snack! You feel ready to outrun Betty later.'),
   });
-  add('Oven', 0x333333, 14, 2, {
-    prompt: 'Turn off the oven', active: () => !T[2].done, keep: true, h: 1.1,
+  makeItem('Oven', 0x333333, 14, 1, {
+    slot: 'oven', kind: 'wall', wall: [29, 1.5, northWallZ, 0], h: 2.2, ph: 1.1, keep: true,
+    prompt: 'Turn off the oven', active: () => !T[2].done,
     act: () => { done(2, 'Oven off. The cookies are (mostly) saved.'); game.stopAlarm(); },
   });
-  add('Map', 0x4f6fa8, 6, 10, {
+  makeItem('Map', 0x4f6fa8, 6, 10, {
+    slot: 'mansion_map', kind: 'pickup', h: 0.65,
     prompt: 'Take the mansion map', active: () => !T[3].done,
     act: () => { done(3, 'You found the mansion map! (Check the corner of your screen.)'); hud.showMinimap(true); },
   });
-  add('Old Trunk', 0x6b4a2a, 22, 10, {
-    prompt: 'Open the trunk', active: () => !T[4].done, keep: true, h: 0.8,
+  makeItem('Old Trunk', 0x6b4a2a, 22, 10, {
+    slot: 'trunk', kind: 'stand', h: 1.15, ph: 0.8, keep: true,
+    prompt: 'Open the trunk', active: () => !T[4].done,
     act: () => done(4, 'An old key, deep in the trunk. That lap was worth it.'),
   });
-  add("Betty's Tray", 0xd884b0, 12, 1, {
-    prompt: 'Steal a cookie', active: () => !T[5].done, keep: true, h: 0.9,
+  makeItem("Betty's Tray", 0xd884b0, 12, 1, {
+    slot: 'cookie_tray', kind: 'stand', h: 0.85, ph: 0.9, keep: true,
+    prompt: 'Steal a cookie', active: () => !T[5].done,
     act: () => { S.cookieStolen = true; done(5, "You stole a cookie! Betty will stop to count them later…"); },
   });
-  add('Back Gate', 0x8a8a8a, 24, 19, {
-    prompt: 'Unlock the back gate', active: () => !T[6].done, keep: true, h: 2.2,
+  makeItem('Back Gate', 0x8a8a8a, 24, 19, {
+    slot: 'back_gate', kind: 'wall', wall: [49, 1.5, southWallZ, Math.PI], h: 2.7, ph: 2.2, keep: true,
+    prompt: 'Unlock the back gate', active: () => !T[6].done,
     act: () => { S.gateUnlocked = true; done(6, 'Back gate unlocked. Your escape route is ready.'); },
   });
-  add('Flashlight', 0xe8d84a, 3, 18, {
+  makeItem('Flashlight', 0xe8d84a, 3, 18, {
+    slot: 'flashlight', kind: 'pickup', h: 0.6,
     prompt: 'Take the flashlight', active: () => !T[7].done,
     act: () => { game.hasFlashlight = true; done(7, 'Flashlight! It switches on when the lights die.'); },
   });
   const props = { a: false, b: false };
-  add('Wedge', 0x5a8a3a, 11, 6, {
-    prompt: 'Prop the kitchen door open', active: () => !props.a, keep: true, h: 0.3,
+  makeItem('Wedge', 0x5a8a3a, 11, 6, {
+    kind: 'stand', ph: 0.3, keep: true,
+    prompt: 'Prop the kitchen door open', active: () => !props.a,
     act: () => {
       props.a = true; kitchenDoor.propped = true; kitchenDoor.mesh.material = kitchenDoor.mats.propMat;
       game.audio.creak();
       if (props.b) done(8, 'Escape path propped open!'); else { hud.toast('Kitchen door propped. One more: the garden door.'); S.dirty = true; }
     },
   });
-  add('Wedge', 0x5a8a3a, 24, 15, {
-    prompt: 'Prop the garden door open', active: () => !props.b, keep: true, h: 0.3,
+  makeItem('Wedge', 0x5a8a3a, 24, 15, {
+    kind: 'stand', ph: 0.3, keep: true,
+    prompt: 'Prop the garden door open', active: () => !props.b,
     act: () => {
       props.b = true; gardenDoor.propped = true; gardenDoor.mesh.material = gardenDoor.mats.propMat;
       game.audio.creak();
       if (props.a) done(8, 'Escape path propped open!'); else { hud.toast('Garden door propped. One more: the kitchen door.'); S.dirty = true; }
     },
   });
-  add('KNIFE', 0xc8ccd4, 10, 1, {
-    prompt: 'TAKE THE KNIFE', active: () => game.finale && !S.hasKnife, keep: true,
+  makeItem('KNIFE', 0xc8ccd4, 10, 1, {
+    slot: 'knife', kind: 'pickup', h: 1.0,
+    prompt: 'TAKE THE KNIFE', active: () => game.finale && !S.hasKnife,
     act: () => {
       S.hasKnife = true; S.dirty = true;
       game.player.speedMul = 1.1;
@@ -112,8 +150,9 @@ export function createTasks(game, scene) {
       hud.toast('YOU HAVE THE KNIFE — RUN! OUT THE BACK GATE!', 5000);
     },
   });
-  add('Front Door', 0x50331c, 11, 19, {
-    prompt: 'Try the front door', active: () => true, keep: true, h: 2.4,
+  makeItem('Front Door', 0x50331c, 11, 19, {
+    slot: 'door', kind: 'wall', wall: [23, 1.5, southWallZ, Math.PI], h: 2.9, ph: 2.4, keep: true,
+    prompt: 'Try the front door', active: () => true,
     act: () => { game.audio.thud(); hud.toast("Nailed shut. Betty's rules. The BACK GATE is the way out."); },
   });
 
@@ -122,7 +161,7 @@ export function createTasks(game, scene) {
   function currentIndex() {
     for (let i = 0; i < T.length; i++) {
       if (T[i].done) continue;
-      if (T[i].finale && !game.finale) return i === 9 && !game.finale ? -1 : i;
+      if (T[i].finale && !game.finale) return -1;
       return i;
     }
     return -1;
@@ -130,8 +169,22 @@ export function createTasks(game, scene) {
 
   let target = null;
 
-  function update() {
+  function update(dt) {
+    animT += dt;
     const p = game.player.pos;
+
+    // prop idle animation: pickups bob and spin, stands billboard
+    for (const it of inter) {
+      const u = it.mesh.userData;
+      if (!u || !u.plane) continue;
+      if (u.kind === 'pickup') {
+        it.mesh.rotation.y += dt * 0.9;
+        u.plane.position.y = u.baseY + Math.sin(animT * 2 + u.phase) * 0.05;
+      } else if (u.kind === 'stand') {
+        it.mesh.rotation.y = Math.atan2(game.camera.position.x - it.mesh.position.x,
+          game.camera.position.z - it.mesh.position.z);
+      }
+    }
 
     // nearest active interactable or door in reach
     target = null;

@@ -5,9 +5,12 @@ import { Player, IS_TOUCH } from './player.js';
 import { Betty } from './betty.js';
 import { GameAudio } from './audio.js';
 import { createTasks } from './tasks.js';
+import { preloadTextures } from './assets.js';
+import { MANIFEST } from '../assets/manifest.js';
 import * as hud from './hud.js';
 
 const TOTAL = 300; // 5:00
+const texturesReady = preloadTextures();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -22,7 +25,13 @@ document.body.appendChild(renderer.domElement);
     const t = document.getElementById('titleText');
     t.textContent = ''; img.style.maxWidth = '72vw'; t.appendChild(img);
   };
-  img.src = 'assets/title.png';
+  img.src = MANIFEST.images.title;
+}
+// screen art: Betty hero shot on the title, victory pose on game over
+for (const [id, slot] of [['heroImg', 'betty_hero'], ['overImg', 'betty_victory']]) {
+  const img = document.getElementById(id);
+  img.onload = () => img.classList.remove('hidden');
+  img.src = MANIFEST.images[slot];
 }
 
 class Game {
@@ -37,7 +46,7 @@ class Game {
     this.capT = 0;
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x000000, 0.028);
+    this.scene.fog = new THREE.FogExp2(0x000000, 0.022);
     this.camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 100);
     this.scene.add(this.camera);
     this.listener = new THREE.AudioListener();
@@ -48,7 +57,8 @@ class Game {
 
     const { lamps } = MAP.buildMap(this.scene);
     this.lamps = lamps;
-    this.hemi = new THREE.HemisphereLight(0x8878aa, 0x221410, 0.55);
+    // the textures are dark — keep the base light generous, iPad-in-a-dim-room readable
+    this.hemi = new THREE.HemisphereLight(0xa89cc8, 0x3a2a20, 1.25);
     this.scene.add(this.hemi);
 
     this.flash = new THREE.SpotLight(0xfff2cc, 0, 24, 0.5, 0.4);
@@ -91,6 +101,7 @@ class Game {
     this.state = 'captured';
     this.capT = 1.2;
     this.player.enabled = false;
+    this.betty.onCaptured(this.player.pos);   // attack pose + WHACK effect
     this.audio.scream();
     hud.hideInteract();
   }
@@ -138,7 +149,7 @@ class Game {
     this.player.update(dt);
     this.betty.update(dt, this);
     if (this.state !== 'playing') return; // capture may have fired
-    this.tasks.update();
+    this.tasks.update(dt);
     MAP.updateDoors(dt);
 
     // smoke-alarm consequence for the burning oven
@@ -204,9 +215,9 @@ function startRun() {
 }
 
 hud.bindScreens({
-  onBegin: startRun,
-  onRetry: startRun,
-  onAgain: startRun,
+  onBegin: () => texturesReady.then(startRun),
+  onRetry: () => texturesReady.then(startRun),
+  onAgain: () => texturesReady.then(startRun),
   onInteract: () => game?.interact(),
 });
 

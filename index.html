@@ -35,6 +35,7 @@ button:active{background:#511}
 #vignette{position:absolute;inset:0;pointer-events:none}
 #lockHint{position:absolute;left:50%;bottom:8vh;transform:translateX(-50%);color:#998;font-size:15px;background:#0009;padding:6px 12px;border-radius:8px}
 .stick{position:fixed;border:2px solid #ffffff2e;border-radius:50%;pointer-events:none;z-index:25;background:#ffffff10}
+.pixelimg{image-rendering:pixelated;max-height:30vh;filter:drop-shadow(0 0 18px #400)}
 </style>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
@@ -55,6 +56,7 @@ button:active{background:#511}
 
 <div id="title" class="screen">
   <h1 id="titleText">BETTY'S IT</h1>
+  <img id="heroImg" class="pixelimg hidden" alt="">
   <div class="byline">Created by Sophie Schmid</div>
   <div class="phones">🎧 Headphones recommended</div>
   <button id="beginBtn">Tap to begin</button>
@@ -62,6 +64,7 @@ button:active{background:#511}
 
 <div id="gameover" class="screen hidden">
   <h1>BETTY GOT YOU</h1>
+  <img id="overImg" class="pixelimg hidden" alt="">
   <div class="byline">You disappear forever.</div>
   <button id="retryBtn">Try again</button>
 </div>

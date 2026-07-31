@@ -1,6 +1,9 @@
 // Loads real assets when present, otherwise hands back placeholders.
+// All game textures live in TEX after preloadTextures() resolves (null = missing).
 import * as THREE from 'three';
 import { MANIFEST } from '../assets/manifest.js';
+
+export const TEX = {};
 
 export function loadTexture(slot) {
   return new Promise((resolve) => {
@@ -8,10 +11,43 @@ export function loadTexture(slot) {
     if (!url) return resolve(null);
     new THREE.TextureLoader().load(
       url,
-      (t) => { t.colorSpace = THREE.SRGBColorSpace; resolve(t); },
+      (t) => {
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.magFilter = THREE.NearestFilter;     // crisp pixel art
+        t.userData.aspect = t.image.width / t.image.height;
+        resolve(t);
+      },
       undefined,
       () => resolve(null),
     );
+  });
+}
+
+let preloading = null;
+export function preloadTextures() {
+  preloading ??= Promise.all(
+    Object.keys(MANIFEST.images).map(async (slot) => { TEX[slot] = await loadTexture(slot); }),
+  ).then(() => TEX);
+  return preloading;
+}
+
+// seamless tile: repeat set from the world-space size of the mesh it covers
+export function tileTexture(slot, worldW, worldH, unitsPerTile) {
+  const base = TEX[slot];
+  if (!base) return null;
+  const t = base.clone();
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(worldW / unitsPerTile, worldH / unitsPerTile);
+  t.needsUpdate = true;
+  return t;
+}
+
+// transparent-PNG cutout material (sprites, props, portraits, windows, doors)
+export function cutoutMaterial(slot, opts = {}) {
+  const t = TEX[slot];
+  if (!t) return null;
+  return new THREE.MeshLambertMaterial({
+    map: t, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide, ...opts,
   });
 }
 
