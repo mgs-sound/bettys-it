@@ -13,7 +13,7 @@ export function loadTexture(slot) {
       url,
       (t) => {
         t.colorSpace = THREE.SRGBColorSpace;
-        t.magFilter = THREE.NearestFilter;     // crisp pixel art
+        t.magFilter = THREE.LinearFilter;      // smooth illustrations, not pixel art
         t.userData.aspect = t.image.width / t.image.height;
         resolve(t);
       },

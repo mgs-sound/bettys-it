@@ -2,7 +2,7 @@
 // One cell = 2m. Halls form a ring around the center block (library + attic);
 // rooms hang off the north and south sides.
 import * as THREE from 'three';
-import { TEX, tileTexture, cutoutMaterial, makeLabelSprite } from './assets.js';
+import { TEX, tileTexture, cutoutMaterial, makeLabelSprite, bottomPadFraction } from './assets.js';
 
 export const CELL = 2;
 export const GRID = [
@@ -43,43 +43,65 @@ export const ROOMS = [
   { name: 'Garden Room',   c0: 16, r0: 17, c1: 27, r1: 19 },
 ];
 
-// Furniture: cell rects [c0, r0, c1, r1, height, color]. Boxes get precise
-// colliders for the player; their cells are blocked for Betty's pathfinding.
+// Furniture: one entry per piece. `slot` pieces render the illustrated art as
+// a floor-standing billboard plane; entries without art (or `box` pieces —
+// counters, crates, planters) render as colored volumes. Every piece gets a
+// collider and blocks its cell for Betty's pathfinding.
 // Placement rules: never on door-approach cells, task-item cells, or spawn.
 const FURNITURE = [
-  // Guest bedroom — bed, dresser (key spot), cabinet (key spot), corner pile (key spot)
-  [4, 1, 5, 1, 0.55, 0x4a2e3e, 'bed'],
-  [1, 2, 1, 2, 1.05, 0x5a4630, 'dresser'],
-  [6, 2, 6, 2, 1.6, 0x4a3a2a, 'cabinet'],
-  [6, 4, 6, 4, 0.45, 0x3a3430, 'clutter'],
+  // Guest bedroom — bed; dresser + cabinet + dark-corner chair are key spots
+  { slot: 'bed', c: 4, r: 1, h: 1.55, color: 0x4a2e3e },
+  { slot: 'dresser', c: 1, r: 2, h: 1.35, color: 0x5a4630 },
+  { slot: 'cabinet', c: 6, r: 2, h: 1.8, color: 0x4a3a2a },
+  { slot: 'chair', c: 6, r: 4, h: 1.35, color: 0x3a3430 },
   // Kitchen — counters (props sit on them), table + chairs
-  [8, 1, 9, 1, 0.95, 0x6a5a4a], [10, 1, 10, 1, 0.95, 0x6a5a4a],
-  [12, 1, 12, 1, 0.95, 0x6a5a4a], [15, 1, 15, 1, 0.95, 0x6a5a4a],
-  [11, 3, 12, 3, 0.8, 0x6a4a2a], [10, 3, 10, 3, 0.5, 0x5a4630], [13, 3, 13, 3, 0.5, 0x5a4630],
-  // Dining room — long table, chairs, cabinet
-  [20, 2, 24, 2, 0.8, 0x6a4a2a],
-  [20, 1, 20, 1, 0.5, 0x5a4630], [22, 1, 22, 1, 0.5, 0x5a4630], [24, 1, 24, 1, 0.5, 0x5a4630],
-  [20, 3, 20, 3, 0.5, 0x5a4630], [22, 3, 22, 3, 0.5, 0x5a4630], [24, 3, 24, 3, 0.5, 0x5a4630],
-  [26, 2, 26, 2, 1.6, 0x4a3a2a],
+  { box: 0x6a5a4a, c: 8, r: 1, h: 0.95 }, { box: 0x6a5a4a, c: 9, r: 1, h: 0.95 },
+  { box: 0x6a5a4a, c: 10, r: 1, h: 0.95 }, { box: 0x6a5a4a, c: 12, r: 1, h: 0.95 },
+  { box: 0x6a5a4a, c: 15, r: 1, h: 0.95 },
+  { slot: 'table', c: 11, r: 3, h: 1.4, color: 0x6a4a2a },
+  { slot: 'chair', c: 10, r: 3, h: 1.35, color: 0x5a4630 },
+  { slot: 'chair', c: 13, r: 3, h: 1.35, color: 0x5a4630 },
+  // Dining room — tables, chairs, cabinet
+  { slot: 'table', c: 21, r: 2, h: 1.4, color: 0x6a4a2a },
+  { slot: 'table', c: 23, r: 2, h: 1.4, color: 0x6a4a2a },
+  { slot: 'chair', c: 20, r: 1, h: 1.35, color: 0x5a4630 },
+  { slot: 'chair', c: 22, r: 1, h: 1.35, color: 0x5a4630 },
+  { slot: 'chair', c: 24, r: 1, h: 1.35, color: 0x5a4630 },
+  { slot: 'chair', c: 21, r: 3, h: 1.35, color: 0x5a4630 },
+  { slot: 'chair', c: 23, r: 3, h: 1.35, color: 0x5a4630 },
+  { slot: 'cabinet', c: 26, r: 2, h: 1.8, color: 0x4a3a2a },
   // Library — shelves, reading table
-  [5, 9, 6, 9, 2.0, 0x4a3626], [10, 9, 10, 9, 2.0, 0x4a3626], [12, 9, 12, 9, 2.0, 0x4a3626],
-  [5, 12, 5, 12, 2.0, 0x4a3626], [11, 12, 12, 12, 2.0, 0x4a3626],
-  [9, 10, 10, 10, 0.8, 0x6a4a2a], [9, 11, 9, 11, 0.5, 0x5a4630],
+  { slot: 'bookshelf', c: 5, r: 9, h: 2.1, color: 0x4a3626 },
+  { slot: 'bookshelf', c: 6, r: 9, h: 2.1, color: 0x4a3626 },
+  { slot: 'bookshelf', c: 10, r: 9, h: 2.1, color: 0x4a3626 },
+  { slot: 'bookshelf', c: 12, r: 9, h: 2.1, color: 0x4a3626 },
+  { slot: 'bookshelf', c: 5, r: 12, h: 2.1, color: 0x4a3626 },
+  { slot: 'bookshelf', c: 11, r: 12, h: 2.1, color: 0x4a3626 },
+  { slot: 'bookshelf', c: 12, r: 12, h: 2.1, color: 0x4a3626 },
+  { slot: 'table', c: 9, r: 10, h: 1.4, color: 0x6a4a2a },
+  { slot: 'chair', c: 9, r: 11, h: 1.35, color: 0x5a4630 },
   // Attic stairs — sparse
-  [15, 9, 15, 9, 0.7, 0x5a4a3a], [15, 12, 15, 12, 1.6, 0x4a3626],
+  { box: 0x5a4a3a, c: 15, r: 9, h: 0.7 },
+  { slot: 'bookshelf', c: 15, r: 12, h: 1.9, color: 0x4a3626 },
   // Attic — crates and junk
-  [20, 9, 21, 9, 0.7, 0x5a4a3a], [24, 11, 24, 11, 1.6, 0x4a3626], [24, 12, 24, 12, 0.5, 0x3a3430],
-  // Basement — abandoned junk (item 5: sparse, broken)
-  [1, 17, 1, 17, 1.6, 0x3a3a42], [6, 19, 6, 19, 0.6, 0x44403a],
-  [1, 19, 1, 19, 0.4, 0x35322e], [6, 17, 6, 17, 0.5, 0x3a3a42],
-  // Entry hall — bench, side table, coat rack
-  [9, 19, 9, 19, 0.5, 0x5a4630], [8, 17, 8, 17, 0.9, 0x5a4630], [14, 17, 14, 17, 1.7, 0x4a3a2a],
+  { box: 0x5a4a3a, c: 20, r: 9, h: 0.7 }, { box: 0x5a4a3a, c: 21, r: 9, h: 0.7 },
+  { slot: 'bookshelf', c: 24, r: 11, h: 1.9, color: 0x4a3626 },
+  { box: 0x3a3430, c: 24, r: 12, h: 0.5 },
+  // Basement — abandoned junk (sparse, broken)
+  { slot: 'bookshelf', c: 1, r: 17, h: 1.9, color: 0x3a3a42 },
+  { box: 0x44403a, c: 6, r: 19, h: 0.6 }, { box: 0x35322e, c: 1, r: 19, h: 0.4 },
+  { box: 0x3a3a42, c: 6, r: 17, h: 0.5 },
+  // Entry hall
+  { slot: 'table', c: 8, r: 17, h: 1.4, color: 0x5a4630 },
+  { slot: 'chair', c: 9, r: 19, h: 1.35, color: 0x5a4630 },
+  { slot: 'cabinet', c: 14, r: 17, h: 1.8, color: 0x4a3a2a },
   // Garden room — planters
-  [17, 17, 17, 17, 0.6, 0x4a5a3a], [19, 19, 19, 19, 0.6, 0x4a5a3a],
-  [21, 17, 21, 17, 0.6, 0x4a5a3a], [26, 18, 26, 18, 0.6, 0x4a5a3a],
+  { box: 0x4a5a3a, c: 17, r: 17, h: 0.6 }, { box: 0x4a5a3a, c: 19, r: 19, h: 0.6 },
+  { box: 0x4a5a3a, c: 21, r: 17, h: 0.6 }, { box: 0x4a5a3a, c: 26, r: 18, h: 0.6 },
 ];
 const obstacles = [];              // world-space AABBs for player collision
 const furnitureCells = new Set();  // Betty walks around furniture
+const furniturePlanes = [];        // textured pieces billboard toward the camera
 
 export function cellChar(c, r) {
   if (r < 0 || r >= H || c < 0 || c >= W) return '#';
@@ -221,8 +243,10 @@ export function buildMap(scene) {
   for (const rm of ROOMS) {
     const w = (rm.c1 - rm.c0 + 1) * CELL, d = (rm.r1 - rm.r0 + 1) * CELL;
     const carpetTex = tileTexture('floor_carpet', w, d, 1.5);
+    // the basement's carpet is cold, faded, and dark — abandoned
+    const carpetTint = rm.name === 'Basement' ? 0x777791 : 0xffffff;
     const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d),
-      new THREE.MeshLambertMaterial(carpetTex ? { map: carpetTex } : { color: 0x3a2d22 }));
+      new THREE.MeshLambertMaterial(carpetTex ? { map: carpetTex, color: carpetTint } : { color: 0x3a2d22 }));
     p.rotation.x = -Math.PI / 2;
     p.position.set(rm.c0 * CELL + w / 2, 0.01, rm.r0 * CELL + d / 2);
     scene.add(p);
@@ -246,19 +270,34 @@ export function buildMap(scene) {
     scene.add(lamp); lamps.push(lamp);
   }
 
-  // furniture volumes: boxes with real colliders; Betty paths around their cells
-  obstacles.length = 0; furnitureCells.clear();
-  const INSET = 0.15;
-  for (const [c0, r0, c1, r1, fh, color] of FURNITURE) {
-    const x0 = c0 * CELL + INSET, x1 = (c1 + 1) * CELL - INSET;
-    const z0 = r0 * CELL + INSET, z1 = (r1 + 1) * CELL - INSET;
-    const box = new THREE.Mesh(
-      new THREE.BoxGeometry(x1 - x0, fh, z1 - z0),
-      new THREE.MeshLambertMaterial({ color }));
-    box.position.set((x0 + x1) / 2, fh / 2, (z0 + z1) / 2);
-    scene.add(box);
-    obstacles.push({ x0, z0, x1, z1 });
-    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) furnitureCells.add(c + ',' + r);
+  // furniture: illustrated pieces as floor-standing billboard planes, plain
+  // volumes elsewhere; all get colliders and block their cell for Betty
+  obstacles.length = 0; furnitureCells.clear(); furniturePlanes.length = 0;
+  for (const f of FURNITURE) {
+    const { x, z } = cellToWorld(f.c, f.r);
+    const tex = f.slot && TEX[f.slot];
+    if (tex) {
+      const h = f.h, w = h * (tex.userData.aspect || 1);
+      const geo = new THREE.PlaneGeometry(w, h);
+      geo.translate(0, h / 2, 0);
+      const mesh = new THREE.Mesh(geo, cutoutMaterial(f.slot));
+      mesh.position.set(x, -bottomPadFraction(tex) * h, z);
+      scene.add(mesh);
+      furniturePlanes.push(mesh);
+      const half = Math.min(0.85, w / 2 + 0.1);
+      obstacles.push({ x0: x - half, z0: z - half, x1: x + half, z1: z + half });
+    } else {
+      const fh = f.h, color = f.box ?? f.color;
+      const x0 = f.c * CELL + 0.15, x1 = (f.c + 1) * CELL - 0.15;
+      const z0 = f.r * CELL + 0.15, z1 = (f.r + 1) * CELL - 0.15;
+      const box = new THREE.Mesh(
+        new THREE.BoxGeometry(x1 - x0, fh, z1 - z0),
+        new THREE.MeshLambertMaterial({ color }));
+      box.position.set((x0 + x1) / 2, fh / 2, (z0 + z1) / 2);
+      scene.add(box);
+      obstacles.push({ x0, z0, x1, z1 });
+    }
+    furnitureCells.add(f.c + ',' + f.r);
   }
 
   // walls as one instanced mesh — skull wallpaper at ~2 world units per tile
@@ -342,6 +381,13 @@ export function buildMap(scene) {
   wallPlane(scene, 'portrait_3', eastX, 1.75, 25, -Math.PI / 2, 1.15);
 
   return { lamps };
+}
+
+// illustrated furniture faces the camera (y-axis only)
+export function updateFurniture(camera) {
+  for (const m of furniturePlanes) {
+    m.rotation.y = Math.atan2(camera.position.x - m.position.x, camera.position.z - m.position.z);
+  }
 }
 
 const SWING_ANGLE = THREE.MathUtils.degToRad(100);

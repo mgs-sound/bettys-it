@@ -29,8 +29,8 @@ window.renderer = renderer;   // debug handle: lets console playtests force a fr
   };
   img.src = MANIFEST.images.title;
 }
-// screen art: Betty hero shot on the title, victory pose on game over
-for (const [id, slot] of [['heroImg', 'betty_hero'], ['overImg', 'betty_victory']]) {
+// screen art: Betty on the title, her furious face on game over
+for (const [id, slot] of [['heroImg', 'betty_roam'], ['overImg', 'betty_gameover']]) {
   const img = document.getElementById(id);
   img.onload = () => img.classList.remove('hidden');
   img.src = MANIFEST.images[slot];
@@ -174,6 +174,7 @@ class Game {
     this.tasks.update(dt);
     this.hands.update(dt, this.player.moving);
     MAP.updateDoors(dt);
+    MAP.updateFurniture(this.camera);
 
     // smoke-alarm consequence for the burning oven
     const elapsed = TOTAL - this.remaining;

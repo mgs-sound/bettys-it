@@ -9,7 +9,7 @@ import { TEX, makeCanvasTexture, bottomPadFraction } from './assets.js';
 
 const BASE_ROAM = 2.0, BASE_CHASE = 3.4;      // player is 4.2 — you win footraces
 const SEE_DIST = 13, GRAB_DIST = 1.55;
-const SPRITE_H = 2.4;
+const SPRITE_H = 2.65;   // a touch over spec so she genuinely looms in a 3.2m hall
 const WAYPOINTS = [[4, 14], [54, 14], [54, 30], [4, 30]];   // hall ring corners
 const TRAY_CELL = { c: 12, r: 2 };            // where she stands to count cookies
 
@@ -68,8 +68,8 @@ export class Betty {
   #setView(v) {
     const mat = this.sprite.material;
     if (mat.map !== v.t) { mat.map = v.t; mat.needsUpdate = true; }
-    // big: ~2.4 tall with an extra 1.1x width so she fills the hallway
-    this.sprite.scale.set(SPRITE_H * v.a * 1.1, SPRITE_H, 1);
+    // big: tall with an extra 1.15x width so she fills the hallway
+    this.sprite.scale.set(SPRITE_H * v.a * 1.15, SPRITE_H, 1);
     this.view = v;
   }
 
@@ -80,7 +80,7 @@ export class Betty {
     this.bobT += dt * (chasing ? 9 : 4);
     this.sprite.position.y = -(this.view.pad || 0) * SPRITE_H
       + Math.abs(Math.sin(this.bobT)) * (chasing ? 0.12 : 0.05);
-    const tilt = chasing ? -0.13 : 0;                       // lean at you when hunting
+    const tilt = chasing ? -0.08 : 0;                       // slight lean; the chase art carries the motion
     this.sprite.rotation.x += (tilt - this.sprite.rotation.x) * Math.min(1, dt * 6);
   }
 

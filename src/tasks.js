@@ -40,16 +40,13 @@ export function createTasks(game, scene) {
     if (slotTex) {
       const h = def.h ?? 0.6;
       const w = h * (slotTex.userData.aspect || 1);
-      const mat = def.slot === 'knife'
-        ? new THREE.MeshBasicMaterial({ map: slotTex, transparent: true, depthWrite: false, side: THREE.DoubleSide })
-        : def.selfLit
-          ? new THREE.MeshBasicMaterial({ map: slotTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide })
-          : cutoutMaterial(def.slot);
+      const mat = def.selfLit
+        ? new THREE.MeshBasicMaterial({ map: slotTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide })
+        : cutoutMaterial(def.slot);
       const geo = new THREE.PlaneGeometry(w, h);
       geo.translate(0, h / 2, 0);
       const plane = new THREE.Mesh(geo, mat);
       const sink = bottomPadFraction(slotTex) * h;
-      if (def.slot === 'knife') plane.renderOrder = 15;
       if (def.kind === 'wall') {
         const [x, baseY, z, rotY] = def.wall;
         plane.position.set(x, baseY - sink, z);

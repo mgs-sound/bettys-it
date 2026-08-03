@@ -1,26 +1,23 @@
-// Betty's It — asset manifest.
+// Betty's It — asset manifest (final art, smooth illustrations).
 // Drop a file at any of these paths and the game uses it automatically;
-// anywhere a file is missing, a labeled placeholder renders instead.
-// NOTE (design v2): pixel Betty is retired. betty_* slots now point at the
-// upcoming hand-drawn art in assets/ root; until those files land, canvas
-// placeholders render. Environment/prop pixel art stays as temporary stand-ins.
-const P = 'assets/prop_sprites/', E = 'assets/env_assets/';
+// anywhere a file is missing, a placeholder renders instead.
+const B = 'assets/betty/', HA = 'assets/hands/', P = 'assets/props/';
+const E = 'assets/env/', F = 'assets/furniture/';
 
 export const MANIFEST = {
   images: {
-    // screens (pending art)
-    title:        'assets/title.png',
-    gameover:     'assets/gameover.png',
-    victory:      'assets/victory.png',
-    // Betty — hand-drawn, single pose (chase pose later)
-    betty_roam:   'assets/betty_roam.png',
-    betty_chase:  'assets/betty_chase.png',     // lands later; roam pose reused until then
-    betty_hero:   'assets/betty_hero.png',      // title art, pending
-    betty_victory:'assets/betty_victory.png',   // game-over art, pending
-    // first-person hands (drawing coming)
-    hands:        'assets/hands.png',
-    rolling_pin:  'assets/rolling_pin.png',     // held-item + pickup art, pending
-    // task props (temporary pixel stand-ins)
+    // screens
+    title:          'assets/title.png',          // Sophie's lettering (still pending)
+    // Betty — always camera-facing; chase art swaps in on the chase trigger
+    betty_roam:     B + 'betty_roam.png',
+    betty_chase:    B + 'betty_chase.png',
+    betty_gameover: B + 'betty_gameover.png',    // game-over screen art
+    // first-person hands — full overlay, swapped by held item
+    hands_empty:      HA + 'hands_empty.png',
+    hands_flashlight: HA + 'hands_flashlight.png',
+    hands_knife:      HA + 'hands_knife.png',
+    hands_pin:        HA + 'hands_pin.png',
+    // task props
     key:          P + 'key.png',
     cookie:       P + 'cookie.png',
     cookie_tray:  P + 'cookie_tray.png',
@@ -30,7 +27,15 @@ export const MANIFEST = {
     flashlight:   P + 'flashlight.png',
     back_gate:    P + 'back_gate.png',
     knife:        P + 'knife.png',
-    // environment (temporary pixel stand-ins)
+    rolling_pin:  'assets/rolling_pin.png',      // pickup art pending (held view uses hands_pin)
+    // furniture — flat planes with colliders
+    bed:        F + 'bed.png',
+    cabinet:    F + 'cabinet.png',
+    dresser:    F + 'dresser.png',
+    table:      F + 'table.png',
+    chair:      F + 'chair.png',
+    bookshelf:  F + 'bookshelf.png',
+    // environment
     wallpaper:    E + 'wallpaper.png',
     floor_wood:   E + 'floor_wood.png',
     floor_carpet: E + 'floor_carpet.png',

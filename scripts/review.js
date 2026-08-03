@@ -75,6 +75,17 @@ async function beginGame(page) {
     await stage(page, 43.8, 21.8, 45, 21, -0.18);
     await shot('5-prop-trunk');
 
+    // chase pose + knife in hand, mid-hall
+    await page.evaluate(() => {
+      const g = window.game;
+      g.finale = true; g.tasks.state.hasKnife = true; g.setHeld();
+      g.player.pos.set(24, 1.6, 14.5);
+      g.player.yaw = -Math.PI / 2; g.player.pitch = -0.03;
+      g.betty.pos.set(29, 0, 14.4);
+      g.betty.startChase(g);
+    });
+    await shot('7-chase-knife');
+
     // game over — let her grab us
     await page.evaluate(() => {
       const g = window.game;
