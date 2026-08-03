@@ -333,8 +333,10 @@ export function buildMap(scene) {
   });
   scene.add(walls);
 
-  // door slabs — hinged at one edge of the frame, swinging into the room
-  const doorH = WALL_H - 0.3, doorW = CELL * 0.98;
+  // door slabs — hinged at one edge of the frame, swinging into the room.
+  // Sized to the frame OPENING exactly (a full cell wide, full wall height);
+  // the texture stretches the small aspect difference so no gaps show.
+  const doorH = WALL_H, doorW = CELL;
   for (const d of doors) {
     let mats, geo;
     if (TEX.door) {
@@ -359,12 +361,12 @@ export function buildMap(scene) {
     const { x, z } = cellToWorld(d.c, d.r);
     if (d.vertical) {
       // slab runs N-S; hinge on the north jamb, swing away from any hallway to the east
-      d.pivot.position.set(x, doorH / 2, z - CELL * 0.49);
+      d.pivot.position.set(x, doorH / 2, z - CELL / 2);
       d.baseRot = -Math.PI / 2;
       d.swing = cellChar(d.c + 1, d.r) === 'h' ? -1 : 1;
     } else {
       // slab runs E-W; hinge on the west jamb, swing away from the hallway side
-      d.pivot.position.set(x - CELL * 0.49, doorH / 2, z);
+      d.pivot.position.set(x - CELL / 2, doorH / 2, z);
       d.baseRot = 0;
       d.swing = cellChar(d.c, d.r + 1) === 'h' ? 1 : -1;   // hall south -> swing north
     }

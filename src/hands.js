@@ -14,21 +14,28 @@ const POSE = {
   knife: 'hands_knife',
   rolling_pin: 'hands_pin',
 };
-const SHOWN_Y = -0.55, HIDDEN_Y = -0.9;      // slide up from below the view edge
+// SHOWN_Y is low enough that at the sway's highest point the sprite's flat
+// bottom edge stays >=40px below the viewport edge (fov 75, plane at z=-0.7:
+// view bottom is y=-0.537; peak bottom here is -0.62+0.012=-0.608)
+const SHOWN_Y = -0.62, HIDDEN_Y = -0.95;
 const EASE_T = 0.2, SWING_HZ = 1.5, W = 0.2; // fixed hand width; item art extends upward
+const SWAY_AMP = 0.012;
 const smooth = (t) => t * t * (3 - 2 * t);
 
-let mirroredEmpty = null;
-function leftTex() {
-  if (mirroredEmpty) return mirroredEmpty;
-  const base = TEX.hands_empty;
+// the art is a LEFT hand (thumb on the image's right): unmirrored art goes on
+// the screen-left; the right hand mirrors it so both thumbs point inside
+const mirrorCache = new Map();
+function mirroredTex(slot) {
+  if (mirrorCache.has(slot)) return mirrorCache.get(slot);
+  const base = TEX[slot];
   if (!base) return null;
-  mirroredEmpty = base.clone();
-  mirroredEmpty.repeat.x = -1;
-  mirroredEmpty.offset.x = 1;
-  mirroredEmpty.needsUpdate = true;
-  mirroredEmpty.userData = { aspect: base.userData.aspect || 0.93 };
-  return mirroredEmpty;
+  const t = base.clone();
+  t.repeat.x = -1;
+  t.offset.x = 1;
+  t.needsUpdate = true;
+  t.userData = { aspect: base.userData.aspect || 0.93 };
+  mirrorCache.set(slot, t);
+  return t;
 }
 
 export class Hands {
@@ -69,8 +76,11 @@ export class Hands {
   // slot: 'knife' | 'rolling_pin' | 'flashlight' | 'key' | null
   setHeld(slot) {
     this.heldSlot = slot;
-    const okR = this.#apply(this.right, TEX[POSE[slot ?? 'none']] || TEX[POSE.none]);
-    const okL = this.#apply(this.left, leftTex());
+    // item variant rides the RIGHT hand (mirrored left-hand art);
+    // the off-hand is plain hands_empty, unmirrored, at screen-left
+    const pose = POSE[slot ?? 'none'];
+    const okR = this.#apply(this.right, mirroredTex(pose) || mirroredTex(POSE.none));
+    const okL = this.#apply(this.left, TEX[POSE.none]);
     this.noArt = !okR || !okL;
   }
 
@@ -86,8 +96,8 @@ export class Hands {
     const sway = Math.cos(Math.PI * this.phase) * 0.006;
     const lift = (show) => HIDDEN_Y + (SHOWN_Y - HIDDEN_Y) * smooth(show);
 
-    this.left.position.y = lift(this.showL) + swing * 0.018;             // opposite phase
-    this.right.position.y = lift(this.showR) - swing * 0.018;
+    this.left.position.y = lift(this.showL) + swing * SWAY_AMP;          // opposite phase
+    this.right.position.y = lift(this.showR) - swing * SWAY_AMP;
     this.left.position.x = -0.3 + sway;
     this.right.position.x = 0.3 + sway;
     this.left.visible = this.showL > 0.01;
