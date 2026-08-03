@@ -59,11 +59,11 @@ class Game {
 
     const { lamps } = MAP.buildMap(this.scene);
     this.lamps = lamps;
-    // the textures are dark — keep the base light generous, iPad-in-a-dim-room readable
-    this.hemi = new THREE.HemisphereLight(0xa89cc8, 0x3a2a20, 1.25);
+    // photoreal textures want contrast: lower ambient, let the lamps carve the rooms
+    this.hemi = new THREE.HemisphereLight(0x9a90b8, 0x2a2018, 0.85);
     this.scene.add(this.hemi);
 
-    this.flash = new THREE.SpotLight(0xfff2cc, 0, 24, 0.5, 0.4);
+    this.flash = new THREE.SpotLight(0xfff2cc, 0, 26, 0.55, 0.45, 1.5);
     this.flash.position.set(0, 0, 0);
     this.flashTarget = new THREE.Object3D();
     this.flashTarget.position.set(0, 0, -2);
@@ -102,7 +102,12 @@ class Game {
   // right hand shows the most dramatic thing you're carrying
   setHeld() {
     const S = this.tasks.state;
-    this.hands.setHeld(S.hasKnife ? 'knife' : S.pinStolen ? 'rolling_pin' : this.hasFlashlight ? 'flashlight' : null);
+    const hasKey = this.tasks.list[0].done || this.tasks.list[4].done;
+    this.hands.setHeld(
+      S.hasKnife ? 'knife'
+        : S.pinStolen ? 'rolling_pin'
+          : this.hasFlashlight ? 'flashlight'
+            : hasKey ? 'key' : null);
   }
 
   startFinale() {
@@ -197,7 +202,7 @@ class Game {
     for (const l of this.lamps) l.intensity = l.userData.base * darkK;
     this.hemi.intensity = 0.55 * Math.max(darkK, 0.25);
     this.scene.fog.density = 0.028 + (1 - darkK) * 0.045;
-    this.flash.intensity = (this.hasFlashlight && darkK < 0.6) ? 60 : 0;
+    this.flash.intensity = (this.hasFlashlight && darkK < 0.7) ? 130 : 0;
 
     // Betty's rumble muffles through closed doors and walls
     this.muffleT -= dt;

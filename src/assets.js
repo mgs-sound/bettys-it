@@ -64,12 +64,14 @@ export function tileTexture(slot, worldW, worldH, unitsPerTile) {
   return t;
 }
 
-// transparent-PNG cutout material (sprites, props, portraits, windows, doors)
+// transparent-PNG cutout material (sprites, props, portraits, windows, doors).
+// alphaTest is high because the photoreal art carries a magenta matte fringe
+// in its semi-transparent edge pixels — trim them instead of rendering them.
 export function cutoutMaterial(slot, opts = {}) {
   const t = TEX[slot];
   if (!t) return null;
   return new THREE.MeshLambertMaterial({
-    map: t, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide, ...opts,
+    map: t, transparent: true, alphaTest: 0.68, side: THREE.DoubleSide, ...opts,
   });
 }
 

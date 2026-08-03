@@ -225,14 +225,32 @@ export function buildMap(scene) {
   makeDoors();
   const lamps = [];
 
-  // floors: wood everywhere (halls), carpet patches in rooms
-  const woodTex = tileTexture('floor_wood', W * CELL, H * CELL, 1.5);
+  // floors: photographic wood everywhere, tiled denser so the boards read real
+  const woodTex = tileTexture('floor_wood', W * CELL, H * CELL, 1.0);
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(W * CELL, H * CELL),
     new THREE.MeshLambertMaterial(woodTex ? { map: woodTex } : { color: 0x2a211b }));
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(W * CELL / 2, 0, H * CELL / 2);
   scene.add(floor);
+
+  // cutout rugs laid flat over the wood in a few rooms
+  if (TEX.carpet_rug) {
+    const rugA = TEX.carpet_rug.userData.aspect || 1.5;
+    for (const [cx, cz, wRug, rot] of [
+      [8, 6.5, 3.4, 0.06],     // guest bedroom
+      [18, 21, 3.8, -0.04],    // library, under the reading table
+      [45, 6, 4.2, 0.02],      // dining room, under the tables
+    ]) {
+      const rug = new THREE.Mesh(
+        new THREE.PlaneGeometry(wRug, wRug / rugA),
+        new THREE.MeshLambertMaterial({ map: TEX.carpet_rug, transparent: true, alphaTest: 0.5 }));
+      rug.rotation.x = -Math.PI / 2;
+      rug.rotation.z = rot;
+      rug.position.set(cx, 0.015, cz);
+      scene.add(rug);
+    }
+  }
 
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W * CELL, H * CELL),
     new THREE.MeshLambertMaterial({ color: 0x1a1512 }));
@@ -242,14 +260,14 @@ export function buildMap(scene) {
 
   for (const rm of ROOMS) {
     const w = (rm.c1 - rm.c0 + 1) * CELL, d = (rm.r1 - rm.r0 + 1) * CELL;
-    const carpetTex = tileTexture('floor_carpet', w, d, 1.5);
-    // the basement's carpet is cold, faded, and dark — abandoned
-    const carpetTint = rm.name === 'Basement' ? 0x777791 : 0xffffff;
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d),
-      new THREE.MeshLambertMaterial(carpetTex ? { map: carpetTex, color: carpetTint } : { color: 0x3a2d22 }));
-    p.rotation.x = -Math.PI / 2;
-    p.position.set(rm.c0 * CELL + w / 2, 0.01, rm.r0 * CELL + d / 2);
-    scene.add(p);
+    // the basement floor is a cold, grimy shadow of the wood elsewhere
+    if (rm.name === 'Basement') {
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d),
+        new THREE.MeshLambertMaterial({ color: 0x1a1c26, transparent: true, opacity: 0.55 }));
+      p.rotation.x = -Math.PI / 2;
+      p.position.set(rm.c0 * CELL + w / 2, 0.01, rm.r0 * CELL + d / 2);
+      scene.add(p);
+    }
     const label = makeLabelSprite(rm.name, { color: '#c9b489', scale: 1.15 });
     const ctr = cellToWorld((rm.c0 + rm.c1) / 2, (rm.r0 + rm.r1) / 2);
     label.position.set(ctr.x, 2.85, ctr.z);
@@ -261,12 +279,12 @@ export function buildMap(scene) {
     lamp.userData.base = lamp.intensity;
     scene.add(lamp); lamps.push(lamp);
   }
-  // hallway lamps
+  // hallway lamps — colder and dimmer than the rooms: halls are dangerous
   for (const [c, r] of [[2, 6.5], [14, 6.5], [26, 6.5], [2, 14.5], [14, 14.5], [26, 14.5], [2, 10.5], [26, 10.5]]) {
     const { x, z } = cellToWorld(c, r);
-    const lamp = new THREE.PointLight(0xd9c9ff, 17, 14, 1.6);
+    const lamp = new THREE.PointLight(0xaebede, 11, 14, 1.6);
     lamp.position.set(x, 2.8, z);
-    lamp.userData.base = 17;
+    lamp.userData.base = 11;
     scene.add(lamp); lamps.push(lamp);
   }
 
@@ -300,10 +318,10 @@ export function buildMap(scene) {
     furnitureCells.add(f.c + ',' + f.r);
   }
 
-  // walls as one instanced mesh — skull wallpaper at ~2 world units per tile
+  // walls as one instanced mesh — photographic wallpaper, denser tiling
   const wallCells = [];
   for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (GRID[r][c] === '#') wallCells.push([c, r]);
-  const wallTex = tileTexture('wallpaper', CELL, WALL_H, 2);
+  const wallTex = tileTexture('wallpaper', CELL, WALL_H, 1.35);
   const wallGeo = new THREE.BoxGeometry(CELL, WALL_H, CELL);
   const wallMat = new THREE.MeshLambertMaterial(wallTex ? { map: wallTex } : { color: 0x4d3d33 });
   const walls = new THREE.InstancedMesh(wallGeo, wallMat, wallCells.length);

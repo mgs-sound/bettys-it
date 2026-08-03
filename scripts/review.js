@@ -79,6 +79,19 @@ async function beginGame(page) {
     await stage(page, 43.8, 21.8, 45, 21, -0.18);
     await shot('5-prop-trunk');
 
+    // final-minute darkness: flashlight on in a cold hall
+    await page.evaluate(() => {
+      const g = window.game;
+      g.hasFlashlight = true; g.setHeld();
+      g.tasks.list[2].done = true; g.stopAlarm();   // keep the smoke alarm out of the shot
+      g.remaining = 30;
+      g.player.pos.set(14, 1.6, 14.5);
+      g.player.yaw = -Math.PI / 2; g.player.pitch = -0.02;
+      g.betty.pos.set(30, 0, 14.4);
+      for (let i = 0; i < 30; i++) g.update(1 / 60);
+    });
+    await shot('8-dark-flashlight');
+
     // chase pose + knife in hand, mid-hall
     await page.evaluate(() => {
       const g = window.game;

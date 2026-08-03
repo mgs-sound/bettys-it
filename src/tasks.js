@@ -116,6 +116,7 @@ export function createTasks(game, scene) {
           bedroomDoor.locked = false;
           bedroomDoor.mesh.material = bedroomDoor.mats.doorMat;
           done(0, SEARCH_MSGS[2]);
+          game.setHeld();                       // the key appears in your hand
         } else {
           hud.toast(SEARCH_MSGS[search.count - 1]);
         }
@@ -144,7 +145,7 @@ export function createTasks(game, scene) {
   makeItem('Old Trunk', 0x6b4a2a, 22, 10, {
     slot: 'trunk', kind: 'stand', h: 1.15, ph: 0.8, keep: true,
     prompt: 'Open the trunk', active: () => !T[4].done,
-    act: () => done(4, 'An old key, deep in the trunk. That lap was worth it.'),
+    act: () => { done(4, 'An old key, deep in the trunk. That lap was worth it.'); game.setHeld(); },
   });
   makeItem("Betty's Tray", 0xd884b0, 12, 1, {
     slot: 'cookie_tray', kind: 'stand', h: 0.85, ph: 0.9, baseY: 0.95, keep: true,   // on the counter

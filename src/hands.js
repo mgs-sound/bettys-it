@@ -1,35 +1,34 @@
 // First-person hands, screen-space at the bottom of the view.
-// Rules: hidden at idle with empty hands · both hands swing while walking
-// (opposite phase, ~1.5Hz, slight bob) · a held item pins the right hand on
-// screen, left joins only while walking · show/hide slides in ~200ms.
-// The art slots are single images containing both hands; each plane shows
-// one UV half, so the slots stay identical when the art is replaced.
+// Art is now single RIGHT-hand images (backs of hands); the left hand is
+// hands_empty mirrored horizontally. Rules: hidden at idle with empty hands ·
+// both hands swing while walking (opposite phase, ~1.5Hz, slight bob) · a
+// held item pins the right hand with that variant, left joins only while
+// walking · show/hide slides in ~200ms.
 import * as THREE from 'three';
 import { TEX } from './assets.js';
 
 const POSE = {
   none: 'hands_empty',
+  key: 'hands_key',
   flashlight: 'hands_flashlight',
   knife: 'hands_knife',
   rolling_pin: 'hands_pin',
 };
-const SHOWN_Y = -0.55, HIDDEN_Y = -0.8;      // slide up from below the view edge
-const EASE_T = 0.2, SWING_HZ = 1.5, H = 0.3;
+const SHOWN_Y = -0.55, HIDDEN_Y = -0.9;      // slide up from below the view edge
+const EASE_T = 0.2, SWING_HZ = 1.5, W = 0.2; // fixed hand width; item art extends upward
 const smooth = (t) => t * t * (3 - 2 * t);
 
-const halves = new Map();
-function halfTex(slot, side) {
-  const key = slot + side;
-  if (halves.has(key)) return halves.get(key);
-  const base = TEX[slot];
+let mirroredEmpty = null;
+function leftTex() {
+  if (mirroredEmpty) return mirroredEmpty;
+  const base = TEX.hands_empty;
   if (!base) return null;
-  const t = base.clone();
-  t.repeat.x = 0.5;
-  t.offset.x = side === 'r' ? 0.5 : 0;
-  t.needsUpdate = true;
-  t.userData = { aspect: (base.userData.aspect || 1.9) / 2 };
-  halves.set(key, t);
-  return t;
+  mirroredEmpty = base.clone();
+  mirroredEmpty.repeat.x = -1;
+  mirroredEmpty.offset.x = 1;
+  mirroredEmpty.needsUpdate = true;
+  mirroredEmpty.userData = { aspect: base.userData.aspect || 0.93 };
+  return mirroredEmpty;
 }
 
 export class Hands {
@@ -44,7 +43,8 @@ export class Hands {
       const geo = new THREE.PlaneGeometry(1, 1);
       geo.translate(0, 0.5, 0);                // bottom pivot
       const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-        transparent: true, depthTest: false, depthWrite: false,   // soft edges for UI sprites
+        // blend for softness, with a mild alphaTest to trim the magenta matte fringe
+        transparent: true, alphaTest: 0.3, depthTest: false, depthWrite: false,
       }));
       m.renderOrder = 40;
       m.position.set(x, HIDDEN_Y, -0.7);
@@ -57,19 +57,21 @@ export class Hands {
     this.setHeld(null);
   }
 
-  // slot: 'knife' | 'rolling_pin' | 'flashlight' | null
+  #apply(mesh, tex) {
+    if (!tex) return false;
+    const mat = mesh.material;
+    if (mat.map !== tex) { mat.map = tex; mat.needsUpdate = true; }
+    const a = tex.userData.aspect || 0.9;
+    mesh.scale.set(W, W / a, 1);               // fixed width; height grows with the item
+    return true;
+  }
+
+  // slot: 'knife' | 'rolling_pin' | 'flashlight' | 'key' | null
   setHeld(slot) {
     this.heldSlot = slot;
-    const pose = POSE[slot ?? 'none'];
-    const texL = halfTex(pose, 'l') || halfTex(POSE.none, 'l');
-    const texR = halfTex(pose, 'r') || halfTex(POSE.none, 'r');
-    this.noArt = !texL || !texR;
-    if (this.noArt) return;
-    for (const [mesh, tex] of [[this.left, texL], [this.right, texR]]) {
-      const mat = mesh.material;
-      if (mat.map !== tex) { mat.map = tex; mat.needsUpdate = true; }
-      mesh.scale.set(H * tex.userData.aspect, H, 1);
-    }
+    const okR = this.#apply(this.right, TEX[POSE[slot ?? 'none']] || TEX[POSE.none]);
+    const okL = this.#apply(this.left, leftTex());
+    this.noArt = !okR || !okL;
   }
 
   update(dt, moving) {

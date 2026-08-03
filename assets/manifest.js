@@ -10,12 +10,13 @@ export const MANIFEST = {
     title:          'assets/title.png',          // Sophie's lettering (still pending)
     // Betty — always camera-facing; chase flipbook alternates a/b at 6fps
     betty_roam:     B + 'betty_roam.png',
-    betty_chase_a:  B + 'betty_chase.png',
-    betty_chase_b:  B + 'betty_chase_b.png',     // frame B pending; procedural-only until it lands
-    betty_gameover: B + 'betty_gameover.png',    // game-over screen art
-    // first-person hands — full overlay, swapped by held item
+    betty_chase_a:  B + 'betty_chase_a.png',
+    betty_chase_b:  B + 'betty_chase_b.png',
+    betty_gameover: B + 'betty_gameover.png',    // full-bleed face on the death screen
+    // first-person hands — single right-hand images (left mirrors hands_empty)
     hands_empty:      HA + 'hands_empty.png',
     hands_flashlight: HA + 'hands_flashlight.png',
+    hands_key:        HA + 'hands_key.png',
     hands_knife:      HA + 'hands_knife.png',
     hands_pin:        HA + 'hands_pin.png',
     // task props
@@ -39,7 +40,7 @@ export const MANIFEST = {
     // environment
     wallpaper:    E + 'wallpaper.png',
     floor_wood:   E + 'floor_wood.png',
-    floor_carpet: E + 'floor_carpet.png',
+    carpet_rug:   E + 'carpet_rug.png',    // cutout rug object, laid flat in a few rooms
     door:         E + 'door.png',
     window:       E + 'window.png',
     portrait_1:   E + 'portrait_1.png',

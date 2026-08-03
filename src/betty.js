@@ -57,7 +57,7 @@ export class Betty {
     geo.translate(0, 0.5, 0);                    // pivot at her feet
     this.sprite = new THREE.Mesh(
       geo,
-      new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.65, side: THREE.DoubleSide }),
     );
     this.group.add(this.sprite);
     this.#setView(this.roamView);
