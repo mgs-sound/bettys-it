@@ -40,15 +40,17 @@ export class Betty {
     this.pos = new THREE.Vector3(WAYPOINTS[2][0], 0, WAYPOINTS[2][1]);
     this.path = null; this.repath = 0; this.lost = 0;
     this.distracted = 0; this.finale = false;
-    this.bobT = 0; this.captured = false;
+    this.bobT = 0; this.animT = 0; this.captured = false;
+    this.stepPhase = 0; this.stepPrev = 0;
     this.countT = 0; this.goingToCount = false; this.hearT = 0;
 
     const mk = (t) => t && { t, a: t.userData.aspect || 0.6, pad: bottomPadFraction(t) };
     this.roamView = mk(TEX.betty_roam) || { t: placeholderFace(false), a: 128 / 192, pad: 0 };
-    // hand-drawn chase art when it lands; hand-drawn roam reused until then;
-    // on pure placeholders, at least switch to the jagged-mouth face
-    this.chaseView = mk(TEX.betty_chase)
+    // chase flipbook: frame A is the chase art (roam/placeholder fallback);
+    // frame B is optional — until its art lands, procedural motion carries it
+    this.chaseA = mk(TEX.betty_chase_a)
       || (TEX.betty_roam ? this.roamView : { t: placeholderFace(true), a: 128 / 192, pad: 0 });
+    this.chaseB = mk(TEX.betty_chase_b);
 
     this.group = new THREE.Group();
     const geo = new THREE.PlaneGeometry(1, 1);
@@ -73,15 +75,31 @@ export class Betty {
     this.view = v;
   }
 
-  #updatePose(dt) {
+  #updatePose(dt, game) {
     if (this.captured) return;                              // lunge pose is pinned
+    this.animT += dt;
     const chasing = this.state === 'chase' && this.distracted <= 0;
-    this.#setView(chasing ? this.chaseView : this.roamView);
-    this.bobT += dt * (chasing ? 9 : 4);
-    this.sprite.position.y = -(this.view.pad || 0) * SPRITE_H
-      + Math.abs(Math.sin(this.bobT)) * (chasing ? 0.12 : 0.05);
-    const tilt = chasing ? -0.08 : 0;                       // slight lean; the chase art carries the motion
-    this.sprite.rotation.x += (tilt - this.sprite.rotation.x) * Math.min(1, dt * 6);
+    let bounce, roll, lean;
+    if (chasing) {
+      // flipbook (6fps) when frame B exists; procedural motion always
+      const flip = this.chaseB && Math.floor(this.animT * 6) % 2 === 1;
+      this.#setView(flip ? this.chaseB : this.chaseA);
+      this.stepPhase += dt * 3;                             // ~3 footfalls per second
+      if (Math.floor(this.stepPhase) > Math.floor(this.stepPrev)) this.audio.footstep();
+      this.stepPrev = this.stepPhase;
+      bounce = Math.abs(Math.sin(Math.PI * this.stepPhase)) * 0.13;
+      roll = Math.sin(Math.PI * this.stepPhase) * 0.035;    // ~2 deg, alternating with the bounce
+      lean = -0.14;                                         // ~8 deg forward
+    } else {
+      this.#setView(this.roamView);
+      this.bobT += dt;
+      bounce = 0.02 + Math.sin(this.bobT * 2) * 0.02;       // gentle sway only
+      roll = Math.sin(this.bobT * 1.1) * 0.015;
+      lean = 0;
+    }
+    this.sprite.position.y = -(this.view.pad || 0) * SPRITE_H + bounce;
+    this.sprite.rotation.z = roll;
+    this.sprite.rotation.x += (lean - this.sprite.rotation.x) * Math.min(1, dt * 6);
   }
 
   onCaptured() {
@@ -233,7 +251,7 @@ export class Betty {
       if (dist < GRAB_DIST) game.capture();
     }
 
-    this.#updatePose(dt);
+    this.#updatePose(dt, game);
     // billboard toward the camera
     this.group.position.copy(this.pos);
     this.group.rotation.y = Math.atan2(this.camera.position.x - this.pos.x, this.camera.position.z - this.pos.z);

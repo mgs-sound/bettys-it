@@ -63,9 +63,13 @@ async function beginGame(page) {
     await beginGame(page);
     await shot('2-hallway-betty');
 
-    // starting bedroom, aimed to show furniture + a hiding spot
+    // starting bedroom, aimed to show furniture + a hiding spot;
+    // walk forward during the shot so the hands swing into frame
     await stage(page, 10.5, 8.5, 3, 3, -0.06);
+    await page.evaluate(() => window.game.player.keys.add('KeyW'));
+    await sleep(450);
     await shot('3-bedroom');
+    await page.evaluate(() => window.game.player.keys.delete('KeyW'));
 
     // basement — abandoned, cold, junk
     await stage(page, 11, 37.5, 3, 36, -0.03);

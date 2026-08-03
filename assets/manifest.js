@@ -8,9 +8,10 @@ export const MANIFEST = {
   images: {
     // screens
     title:          'assets/title.png',          // Sophie's lettering (still pending)
-    // Betty — always camera-facing; chase art swaps in on the chase trigger
+    // Betty — always camera-facing; chase flipbook alternates a/b at 6fps
     betty_roam:     B + 'betty_roam.png',
-    betty_chase:    B + 'betty_chase.png',
+    betty_chase_a:  B + 'betty_chase.png',
+    betty_chase_b:  B + 'betty_chase_b.png',     // frame B pending; procedural-only until it lands
     betty_gameover: B + 'betty_gameover.png',    // game-over screen art
     // first-person hands — full overlay, swapped by held item
     hands_empty:      HA + 'hands_empty.png',

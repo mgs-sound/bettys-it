@@ -115,6 +115,13 @@ export class GameAudio {
     this.rumble.setFilter(this.rumbleFilter);
     this.chaseSnd = mk(this.bufs.chase, 6, 0.9, true);
     this.screamSnd = mk(this.bufs.scream, 8, 1, false);
+    this.stepSnd = mk(this.bufs.thud, 5, 0.35, false);   // her footfalls while she runs
+  }
+
+  footstep() {
+    if (!this.stepSnd) return;
+    if (this.stepSnd.isPlaying) this.stepSnd.stop();
+    this.stepSnd.play();
   }
 
   startRumble() { if (this.rumble && !this.rumble.isPlaying) this.rumble.play(); }
