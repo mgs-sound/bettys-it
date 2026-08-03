@@ -1,0 +1,23 @@
+{
+  "name": "bettys-it",
+  "version": "1.0.0",
+  "description": "Sophie's horror-lite tag game — dev tooling only, the game itself has no build step",
+  "scripts": {
+    "review": "node scripts/review.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mgs-sound/bettys-it.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mgs-sound/bettys-it/issues"
+  },
+  "homepage": "https://github.com/mgs-sound/bettys-it#readme",
+  "devDependencies": {
+    "puppeteer": "^25.4.0"
+  },
+  "private": true
+}

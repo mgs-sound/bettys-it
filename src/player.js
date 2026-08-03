@@ -1,9 +1,13 @@
-// First-person player: WASD + pointer lock on desktop; on touch, left half of
-// the screen is a virtual move stick and the right half drags to look.
+// First-person player.
+// Desktop: tank controls — W/S move, A/D turn (~120°/s), Q/E strafe, F interacts.
+// Mouse look via pointer lock (click to engage); if pointer lock errors or is
+// unavailable, drag-to-look takes over automatically.
+// Touch (unchanged): left half = move stick, right half = look drag.
 import * as THREE from 'three';
 import { blockedCircle } from './map.js';
 
 const SPEED = 4.2, RADIUS = 0.45, EYE = 1.6;
+const TURN_RATE = THREE.MathUtils.degToRad(120);
 export const IS_TOUCH = 'ontouchstart' in window;
 
 export class Player {
@@ -13,13 +17,24 @@ export class Player {
     this.yaw = startYaw; this.pitch = 0;
     this.speedMul = 1;
     this.enabled = true;
+    this.moving = false;
 
     this.keys = new Set();
     this.lookDX = 0; this.lookDY = 0;
     this.moveTouch = null; this.lookTouch = null;
+    this.drag = null;
+    this.lockBroken = false;
     this.onInteractKey = null;
+    this.onLockError = null;
 
     this.#bind(canvas);
+  }
+
+  #lockFailed(err) {
+    if (this.lockBroken) return;
+    this.lockBroken = true;
+    console.warn("Pointer lock unavailable — falling back to drag-to-look.", err ?? '');
+    this.onLockError?.();
   }
 
   #bind(canvas) {
@@ -31,24 +46,42 @@ export class Player {
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Tab') e.preventDefault();
       this.keys.add(e.code);
-      if (e.code === 'KeyE') this.onInteractKey?.();
+      if (e.code === 'KeyF') this.onInteractKey?.();
     }, sig);
     window.addEventListener('keyup', (e) => this.keys.delete(e.code), sig);
 
     if (!IS_TOUCH) {
+      document.addEventListener('pointerlockerror', () => this.#lockFailed(), sig);
       canvas.addEventListener('click', () => {
-        if (this.enabled && document.pointerLockElement !== canvas) {
-          canvas.requestPointerLock?.().catch?.(() => {});
+        if (this.enabled && !this.lockBroken && document.pointerLockElement !== canvas) {
+          try {
+            const p = canvas.requestPointerLock?.();
+            p?.catch?.((e) => this.#lockFailed(e));
+          } catch (e) {
+            this.#lockFailed(e);
+          }
         }
       }, sig);
-      canvas.addEventListener('mousedown', () => {
-        if (document.pointerLockElement === canvas) this.onInteractKey?.();
+      canvas.addEventListener('mousedown', (e) => {
+        if (document.pointerLockElement === canvas) { this.onInteractKey?.(); return; }
+        this.drag = { x: e.clientX, y: e.clientY, moved: 0 };
       }, sig);
       window.addEventListener('mousemove', (e) => {
         if (document.pointerLockElement === canvas) {
           this.lookDX += e.movementX * 0.0023;
           this.lookDY += e.movementY * 0.0023;
+        } else if (this.drag) {
+          const dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y;
+          this.drag.x = e.clientX; this.drag.y = e.clientY;
+          this.drag.moved += Math.abs(dx) + Math.abs(dy);
+          this.lookDX += dx * 0.0042;
+          this.lookDY += dy * 0.0042;
         }
+      }, sig);
+      window.addEventListener('mouseup', () => {
+        // a clean click (no drag) doubles as interact once pointer lock is off the table
+        if (this.drag && this.drag.moved < 5 && this.lockBroken) this.onInteractKey?.();
+        this.drag = null;
       }, sig);
     } else {
       this.#makeStickUI();
@@ -117,29 +150,30 @@ export class Player {
   }
   #stickHide() { this.stickBase.classList.add('hidden'); this.stickKnobEl.classList.add('hidden'); }
 
-  moveVector() {
-    let mx = 0, mz = 0;
-    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) mz -= 1;
-    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) mz += 1;
-    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) mx -= 1;
-    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) mx += 1;
+  #inputs() {
+    const k = this.keys;
+    const turn = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
+    let mz = (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0);
+    let mx = (k.has('KeyE') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0);
     if (this.moveTouch) {
       mx += (this.moveTouch.x - this.moveTouch.ox) / 55;
       mz += (this.moveTouch.y - this.moveTouch.oy) / 55;
     }
     const len = Math.hypot(mx, mz);
     if (len > 1) { mx /= len; mz /= len; }
-    return { mx, mz };
+    return { mx, mz, turn };
   }
 
   update(dt) {
     if (!this.enabled) { this.lookDX = this.lookDY = 0; return; }
-    this.yaw -= this.lookDX;
+    const { mx, mz, turn } = this.#inputs();
+
+    this.yaw -= turn * TURN_RATE * dt;          // A/D tank turn
+    this.yaw -= this.lookDX;                    // mouse / touch look
     this.pitch = Math.max(-1.15, Math.min(1.15, this.pitch - this.lookDY));
     this.lookDX = this.lookDY = 0;
 
-    const { mx, mz } = this.moveVector();
-    this.moving = Math.hypot(mx, mz) > 0.1;   // Betty's hearing keys off this
+    this.moving = Math.hypot(mx, mz) > 0.1;     // Betty's hearing keys off this
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     const vx = (mx * cos + mz * sin) * SPEED * this.speedMul * dt;
     const vz = (-mx * sin + mz * cos) * SPEED * this.speedMul * dt;

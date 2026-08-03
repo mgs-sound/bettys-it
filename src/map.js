@@ -48,7 +48,7 @@ export const ROOMS = [
 // Placement rules: never on door-approach cells, task-item cells, or spawn.
 const FURNITURE = [
   // Guest bedroom — bed, dresser (key spot), cabinet (key spot), corner pile (key spot)
-  [4, 1, 5, 1, 0.55, 0x6a4455, 'bed'],
+  [4, 1, 5, 1, 0.55, 0x4a2e3e, 'bed'],
   [1, 2, 1, 2, 1.05, 0x5a4630, 'dresser'],
   [6, 2, 6, 2, 1.6, 0x4a3a2a, 'cabinet'],
   [6, 4, 6, 4, 0.45, 0x3a3430, 'clutter'],
@@ -68,7 +68,7 @@ const FURNITURE = [
   // Attic stairs — sparse
   [15, 9, 15, 9, 0.7, 0x5a4a3a], [15, 12, 15, 12, 1.6, 0x4a3626],
   // Attic — crates and junk
-  [20, 9, 21, 9, 0.7, 0x5a4a3a], [24, 9, 24, 9, 1.6, 0x4a3626], [24, 12, 24, 12, 0.5, 0x3a3430],
+  [20, 9, 21, 9, 0.7, 0x5a4a3a], [24, 11, 24, 11, 1.6, 0x4a3626], [24, 12, 24, 12, 0.5, 0x3a3430],
   // Basement — abandoned junk (item 5: sparse, broken)
   [1, 17, 1, 17, 1.6, 0x3a3a42], [6, 19, 6, 19, 0.6, 0x44403a],
   [1, 19, 1, 19, 0.4, 0x35322e], [6, 17, 6, 17, 0.5, 0x3a3a42],

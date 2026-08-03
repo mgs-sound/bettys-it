@@ -36,7 +36,7 @@ export class Hands {
 
     const mk = (map) => {
       const m = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.26, 0.26),
+        new THREE.PlaneGeometry(0.14, 0.14),
         new THREE.MeshBasicMaterial({ map, transparent: true, alphaTest: 0.5, depthTest: false }));
       m.renderOrder = 40;
       this.group.add(m);
@@ -44,15 +44,15 @@ export class Hands {
     };
     this.left = mk(mirrored);
     this.right = mk(tex);
-    this.left.position.set(-0.24, -0.3, -0.7);
-    this.right.position.set(0.24, -0.3, -0.7);
-    this.left.rotation.z = 0.25; this.right.rotation.z = -0.25;
+    this.left.position.set(-0.3, -0.34, -0.7);
+    this.right.position.set(0.3, -0.34, -0.7);
+    this.left.rotation.z = 0.3; this.right.rotation.z = -0.3;
 
     this.held = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
       new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.5, depthTest: false, visible: false }));
     this.held.renderOrder = 41;
-    this.held.position.set(0.26, -0.18, -0.72);
+    this.held.position.set(0.3, -0.26, -0.72);
     this.group.add(this.held);
   }
 
@@ -75,11 +75,11 @@ export class Hands {
     this.swayT += dt * (moving ? 7 : 1.6);
     const bob = Math.sin(this.swayT) * (moving ? 0.014 : 0.004);
     const sway = Math.cos(this.swayT / 2) * (moving ? 0.01 : 0.003);
-    this.left.position.y = -0.3 + bob;
-    this.right.position.y = -0.3 + bob * 1.15;
-    this.left.position.x = -0.24 + sway;
-    this.right.position.x = 0.24 + sway;
-    this.held.position.y = -0.18 + bob * 1.15;
-    this.held.position.x = 0.26 + sway;
+    this.left.position.y = -0.34 + bob;
+    this.right.position.y = -0.34 + bob * 1.15;
+    this.left.position.x = -0.3 + sway;
+    this.right.position.x = 0.3 + sway;
+    this.held.position.y = -0.26 + bob * 1.15;
+    this.held.position.x = 0.3 + sway;
   }
 }

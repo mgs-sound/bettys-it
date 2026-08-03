@@ -42,7 +42,7 @@ export function setChecklist(tasks, currentIdx) {
 
 export function showInteract(label) {
   const b = $('interactBtn');
-  b.textContent = label + (('ontouchstart' in window) ? '' : '  (E)');
+  b.textContent = label + (('ontouchstart' in window) ? '' : '  (F)');
   b.classList.remove('hidden');
 }
 export function hideInteract() { $('interactBtn').classList.add('hidden'); }

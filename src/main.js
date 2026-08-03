@@ -73,6 +73,7 @@ class Game {
     const start = MAP.cellToWorld(4, 2);
     this.player = new Player(this.camera, renderer.domElement, start.x, start.z, Math.PI);
     this.player.onInteractKey = () => this.interact();
+    this.player.onLockError = () => hud.toast('Mouse lock unavailable — drag the view to look around.', 4500);
 
     this.betty = new Betty(this.scene, this.camera, this.audio);
     this.tasks = createTasks(this, this.scene);
@@ -236,6 +237,15 @@ function startRun() {
   hud.showMinimap(false);
   game = new Game();
   window.game = game;   // debug handle for playtesting from the console
+
+  // ?debug=betty — stage her in plain view down the north hall (review shots)
+  if (new URLSearchParams(location.search).get('debug') === 'betty') {
+    game.player.pos.set(14, 1.6, 14.5);
+    game.player.yaw = -Math.PI / 2;              // face east
+    game.betty.pos.set(18.5, 0, 14.3);           // close: she should feel imposing
+    game.betty.wp = 1;
+    game.betty.canSee = () => false;             // hold her roaming for the camera
+  }
 }
 
 hud.bindScreens({

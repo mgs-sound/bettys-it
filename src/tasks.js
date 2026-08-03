@@ -42,7 +42,9 @@ export function createTasks(game, scene) {
       const w = h * (slotTex.userData.aspect || 1);
       const mat = def.slot === 'knife'
         ? new THREE.MeshBasicMaterial({ map: slotTex, transparent: true, depthWrite: false, side: THREE.DoubleSide })
-        : cutoutMaterial(def.slot);
+        : def.selfLit
+          ? new THREE.MeshBasicMaterial({ map: slotTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide })
+          : cutoutMaterial(def.slot);
       const geo = new THREE.PlaneGeometry(w, h);
       geo.translate(0, h / 2, 0);
       const plane = new THREE.Mesh(geo, mat);
@@ -59,6 +61,11 @@ export function createTasks(game, scene) {
       const baseY = def.baseY ?? 0;
       plane.position.y = def.kind === 'pickup' ? baseY + 0.75 : baseY - sink;
       g.add(plane);
+      if (def.glow) {
+        const glow = new THREE.PointLight(0xffe9a0, 9, 8, 1.6);
+        glow.position.y = plane.position.y + 0.25;
+        g.add(glow);
+      }
       g.userData = { plane, baseY: plane.position.y, phase: Math.random() * 6.28, kind: def.kind };
     } else {
       const bh = def.ph ?? 0.5;
@@ -204,7 +211,7 @@ export function createTasks(game, scene) {
     },
   });
   makeItem('Flashlight', 0xe8d84a, 3, 18, {
-    slot: 'flashlight', kind: 'pickup', h: 0.6,
+    slot: 'flashlight', kind: 'pickup', h: 0.6, glow: true, selfLit: true,   // findable in the dark basement
     prompt: 'Take the flashlight', active: () => !T[8].done,
     act: () => {
       game.hasFlashlight = true; game.setHeld();
