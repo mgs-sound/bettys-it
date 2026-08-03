@@ -63,6 +63,15 @@ Shown as a checklist; mostly sequential with light flexibility. Interact prompts
 ## Asset pipeline (later)
 A single `assets/manifest.js` mapping named slots → image/audio files: `betty_roam.png`, `betty_chase.png`, `knife.png`, `key.png`, `title.png`, portraits, door, window, wallpaper, gameover.png, victory.png, plus audio files. Placeholders render wherever a file is missing, so art can land incrementally.
 
+## Design v2 (Sophie's update, Aug 2026)
+- **Task 1**: three hiding places in the bedroom (dresser drawer, cabinet, dark corner) — search all three; the key turns up in the last one you check.
+- **New task — steal Betty's rolling pin**: after the cookie theft she periodically returns to the tray to count cookies (~every 40s); while she counts, the pin beside the tray can be stolen. Stolen pin = slightly slower chases, angrier scream. "Prop open doors" merged into the back-gate task to keep 10 tasks.
+- **Betty art**: single hand-drawn sprite (`betty_roam.png`, chase pose later), always camera-facing, ~2.4 units tall ×1.1 wide. Chase = forward tilt + faster bob until chase art lands. All pixel Betty sprites retired.
+- **First-person hands** at the bottom of the view (`hands.png` slot), swaying with movement; right hand shows knife/pin/flashlight when carried.
+- **Furnished rooms**: simple collidable furniture volumes everywhere; Betty paths around them.
+- **Basement**: abandoned — much dimmer, cold blue light, junk, cold-air drone. Flashlight lives there.
+- **Difficulty ramp**: each finished task = +4% Betty patrol speed and a bigger hearing radius (footsteps draw her in); late tasks zig-zag the mansion so hallway crossings pile up before the finale.
+
 ## Milestones
 1. Mansion + first-person controls (desktop, then touch) + doors.
 2. Timer + task system with all 10 tasks stubbed.

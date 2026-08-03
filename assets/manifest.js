@@ -1,32 +1,26 @@
 // Betty's It — asset manifest.
 // Drop a file at any of these paths and the game uses it automatically;
 // anywhere a file is missing, a labeled placeholder renders instead.
-const B = 'assets/betty_sprites/', P = 'assets/prop_sprites/', E = 'assets/env_assets/';
+// NOTE (design v2): pixel Betty is retired. betty_* slots now point at the
+// upcoming hand-drawn art in assets/ root; until those files land, canvas
+// placeholders render. Environment/prop pixel art stays as temporary stand-ins.
+const P = 'assets/prop_sprites/', E = 'assets/env_assets/';
 
 export const MANIFEST = {
   images: {
-    // screens
-    title:        'assets/title.png',          // Sophie's hand lettering (pending)
-    gameover:     'assets/gameover.png',       // (pending)
-    victory:      'assets/victory.png',        // (pending)
-    // Betty — directional views + animation frames
-    betty_front:   B + 'betty_front.png',
-    betty_side:    B + 'betty_side.png',       // drawn facing screen-left
-    betty_back:    B + 'betty_back.png',
-    betty_34front: B + 'betty_34front.png',
-    betty_34back:  B + 'betty_34back.png',
-    betty_idle:    B + 'betty_idle.png',
-    betty_walk1:   B + 'betty_walk1.png',
-    betty_walk2:   B + 'betty_walk2.png',
-    betty_attack:  B + 'betty_attack.png',
-    betty_hurt:    B + 'betty_hurt.png',       // unused for now
-    betty_jump:    B + 'betty_jump.png',       // unused for now
-    betty_victory: B + 'betty_victory.png',    // game-over screen art
-    betty_death:   B + 'betty_death.png',      // unused for now
-    betty_hero:    B + 'betty_hero.png',       // title screen art
-    rolling_pin:   B + 'rolling_pin.png',
-    effect_hit:    B + 'effect_hit.png',
-    // task props
+    // screens (pending art)
+    title:        'assets/title.png',
+    gameover:     'assets/gameover.png',
+    victory:      'assets/victory.png',
+    // Betty — hand-drawn, single pose (chase pose later)
+    betty_roam:   'assets/betty_roam.png',
+    betty_chase:  'assets/betty_chase.png',     // lands later; roam pose reused until then
+    betty_hero:   'assets/betty_hero.png',      // title art, pending
+    betty_victory:'assets/betty_victory.png',   // game-over art, pending
+    // first-person hands (drawing coming)
+    hands:        'assets/hands.png',
+    rolling_pin:  'assets/rolling_pin.png',     // held-item + pickup art, pending
+    // task props (temporary pixel stand-ins)
     key:          P + 'key.png',
     cookie:       P + 'cookie.png',
     cookie_tray:  P + 'cookie_tray.png',
@@ -36,7 +30,7 @@ export const MANIFEST = {
     flashlight:   P + 'flashlight.png',
     back_gate:    P + 'back_gate.png',
     knife:        P + 'knife.png',
-    // environment
+    // environment (temporary pixel stand-ins)
     wallpaper:    E + 'wallpaper.png',
     floor_wood:   E + 'floor_wood.png',
     floor_carpet: E + 'floor_carpet.png',

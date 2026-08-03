@@ -139,6 +139,7 @@ export class Player {
     this.lookDX = this.lookDY = 0;
 
     const { mx, mz } = this.moveVector();
+    this.moving = Math.hypot(mx, mz) > 0.1;   // Betty's hearing keys off this
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     const vx = (mx * cos + mz * sin) * SPEED * this.speedMul * dt;
     const vz = (-mx * sin + mz * cos) * SPEED * this.speedMul * dt;

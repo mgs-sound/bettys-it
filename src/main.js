@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import * as MAP from './map.js';
 import { Player, IS_TOUCH } from './player.js';
 import { Betty } from './betty.js';
+import { Hands } from './hands.js';
 import { GameAudio } from './audio.js';
 import { createTasks } from './tasks.js';
 import { preloadTextures } from './assets.js';
@@ -75,6 +76,14 @@ class Game {
 
     this.betty = new Betty(this.scene, this.camera, this.audio);
     this.tasks = createTasks(this, this.scene);
+    this.hands = new Hands(this.camera);
+
+    // the basement's cold-air drone
+    const droneAnchor = new THREE.Object3D();
+    const bs = MAP.cellToWorld(3.5, 18);
+    droneAnchor.position.set(bs.x, 1.4, bs.z);
+    this.scene.add(droneAnchor);
+    this.audio.attachDrone(droneAnchor);
 
     this.audio.startRumble();
     this.audio.startMusic();
@@ -86,12 +95,21 @@ class Game {
 
   stopAlarm() { this.alarmOn = false; this.audio.setAlarm(false); }
 
+  // pre-finale tasks completed, for the difficulty ramp
+  doneCount() { return this.tasks.list.slice(0, 9).filter((t) => t.done).length; }
+
+  // right hand shows the most dramatic thing you're carrying
+  setHeld() {
+    const S = this.tasks.state;
+    this.hands.setHeld(S.hasKnife ? 'knife' : S.pinStolen ? 'rolling_pin' : this.hasFlashlight ? 'flashlight' : null);
+  }
+
   startFinale() {
     this.finale = true;
     this.stopAlarm();
     this.tasks.markDirty();
-    const tray = MAP.cellToWorld(12, 1);
-    this.betty.onFinale(this.tasks.state.cookieStolen, tray);
+    const tray = MAP.cellToWorld(12, 2);   // in front of the counter, beside her tray
+    this.betty.onFinale(this.tasks.state.cookieStolen, tray, this);
     hud.toast(this.tasks.state.cookieStolen
       ? "TIME'S UP! Betty is counting her cookies — GO GET THE KNIFE!"
       : "TIME'S UP! BETTY IS HUNTING YOU. Get the knife from the kitchen!", 6000);
@@ -102,7 +120,7 @@ class Game {
     this.state = 'captured';
     this.capT = 1.2;
     this.player.enabled = false;
-    this.betty.onCaptured(this.player.pos);   // attack pose + WHACK effect
+    this.betty.onCaptured();                  // the lunge
     this.audio.scream();
     this.audio.fadeOutMusic(1.2);             // fade the bed across the grab cinematic
     hud.hideInteract();
@@ -153,6 +171,7 @@ class Game {
     this.betty.update(dt, this);
     if (this.state !== 'playing') return; // capture may have fired
     this.tasks.update(dt);
+    this.hands.update(dt, this.player.moving);
     MAP.updateDoors(dt);
 
     // smoke-alarm consequence for the burning oven

@@ -1,6 +1,7 @@
-// The 10 tasks, their objects in the world, and the interact system
-// (which also handles doors). Mostly sequential, but flexible: any active
-// object can be used out of order.
+// The 10 tasks (design v2), their objects in the world, and the interact
+// system (which also handles doors). Mostly sequential, but flexible: any
+// active object can be used out of order. Later tasks deliberately zig-zag
+// across the mansion so the pre-finale stretch forces hallway crossings.
 import * as THREE from 'three';
 import * as MAP from './map.js';
 import { TEX, cutoutMaterial, makeLabelSprite, bottomPadFraction } from './assets.js';
@@ -10,25 +11,30 @@ const REACH = 2.3;
 
 export function createTasks(game, scene) {
   const T = [
-    { label: 'Find the key & escape the bedroom', hint: "You're LOCKED IN. Find the key somewhere in this bedroom." },
+    { label: 'Search the bedroom & find the key', hint: "You're LOCKED IN. Search the dresser, the cabinet, the dark corner…" },
     { label: 'Grab a snack from the kitchen', hint: 'Sneak to the KITCHEN (north hall) and grab a snack for energy.' },
     { label: 'Turn off the oven', hint: 'The cookies are burning! Turn OFF the oven in the kitchen.' },
     { label: 'Find the mansion map in the library', hint: 'The LIBRARY (center of the house) hides a map of the mansion.' },
     { label: 'Get the old key from the attic trunk', hint: 'Full lap! The ATTIC trunk (through Attic Stairs, center-east) hides the front-door key.' },
     { label: "Steal a cookie off Betty's tray", hint: "Steal a cookie from Betty's tray in the KITCHEN. Don't get caught…" },
-    { label: 'Unlock the back gate (garden room)', hint: 'Unlock the BACK GATE in the Garden Room (south-east). Your escape route.' },
+    { label: "Steal Betty's ROLLING PIN", hint: 'She keeps coming back to COUNT her cookies. While she counts by the tray — take her rolling pin!' },
+    { label: 'Open the escape route (gate + doors)', hint: 'Unlock the BACK GATE (Garden Room), then prop open the kitchen & garden hall doors (green wedges).' },
     { label: 'Grab the flashlight from the basement', hint: 'Get the FLASHLIGHT from the Basement (south-west). The halls go dark soon.' },
-    { label: 'Prop open the escape-path doors', hint: 'Prop open the KITCHEN hall door and the GARDEN hall door (green wedges in the halls).' },
     { label: 'STEAL THE KNIFE & ESCAPE!', hint: "TIME'S UP — BETTY HUNTS. Grab her knife from the KITCHEN, then OUT THE BACK GATE!", finale: true },
   ].map((t) => ({ ...t, done: false }));
 
-  const S = { cookieStolen: false, gateUnlocked: false, hasKnife: false, dirty: true };
+  const S = { cookieStolen: false, pinStolen: false, gateUnlocked: false, hasKnife: false, dirty: true };
   const inter = [];
   let animT = 0;
 
-  // kind: 'pickup' floats/bobs/spins · 'stand' rests on the floor, billboards ·
-  // 'wall' hangs flat on a wall at def.wall = [x, y, z, rotY]
+  // kind: 'pickup' floats/bobs/spins · 'stand' rests on a surface, billboards ·
+  // 'wall' hangs flat at def.wall = [x, baseY, z, rotY] · invisible: furniture
+  // already provides the visual (search spots)
   function makeItem(text, color, c, r, def) {
+    if (def.invisible) {
+      inter.push({ c, r, mesh: null, kind: 'spot', ...defApi(def) });
+      return;
+    }
     const g = new THREE.Group();
     const slotTex = def.slot && TEX[def.slot];
     if (slotTex) {
@@ -38,27 +44,29 @@ export function createTasks(game, scene) {
         ? new THREE.MeshBasicMaterial({ map: slotTex, transparent: true, depthWrite: false, side: THREE.DoubleSide })
         : cutoutMaterial(def.slot);
       const geo = new THREE.PlaneGeometry(w, h);
-      geo.translate(0, h / 2, 0);                         // pivot at the base
+      geo.translate(0, h / 2, 0);
       const plane = new THREE.Mesh(geo, mat);
-      const sink = bottomPadFraction(slotTex) * h;        // cancel transparent padding under the art
-      if (def.slot === 'knife') plane.renderOrder = 15;   // feathered glow: blend last
+      const sink = bottomPadFraction(slotTex) * h;
+      if (def.slot === 'knife') plane.renderOrder = 15;
       if (def.kind === 'wall') {
-        const [x, baseY, z, rotY] = def.wall;             // baseY = where the bottom edge sits
+        const [x, baseY, z, rotY] = def.wall;
         plane.position.set(x, baseY - sink, z);
         plane.rotation.y = rotY;
         scene.add(plane);
         inter.push({ c, r, mesh: plane, kind: 'wall', ...defApi(def) });
         return;
       }
-      plane.position.y = def.kind === 'pickup' ? 0.75 : -sink;   // pickups hover, stands touch down
+      const baseY = def.baseY ?? 0;
+      plane.position.y = def.kind === 'pickup' ? baseY + 0.75 : baseY - sink;
       g.add(plane);
       g.userData = { plane, baseY: plane.position.y, phase: Math.random() * 6.28, kind: def.kind };
     } else {
       const bh = def.ph ?? 0.5;
+      const base = def.baseY ?? 0;
       const box = new THREE.Mesh(new THREE.BoxGeometry(0.55, bh, 0.55), new THREE.MeshLambertMaterial({ color }));
-      box.position.y = bh / 2;
+      box.position.y = base + bh / 2;
       const label = makeLabelSprite(text, { scale: 0.9 });
-      label.position.y = bh + 0.55;
+      label.position.y = base + bh + 0.55;
       g.add(box, label);
     }
     const { x, z } = MAP.cellToWorld(c, r);
@@ -81,14 +89,39 @@ export function createTasks(game, scene) {
   const bedroomDoor = MAP.doorAt(3, 5);
   const kitchenDoor = MAP.doorAt(11, 5);
   const gardenDoor = MAP.doorAt(24, 16);
-  const northWallZ = MAP.CELL + 0.04;                    // kitchen north wall face
-  const southWallZ = (MAP.H - 1) * MAP.CELL - 0.04;      // garden/entry south wall face
+  const northWallZ = MAP.CELL + 0.04;
+  const southWallZ = (MAP.H - 1) * MAP.CELL - 0.04;
 
-  makeItem('Key', 0xd9b64a, 2, 2, {
-    slot: 'key', kind: 'pickup', h: 0.65,
-    prompt: 'Take the key', active: () => !T[0].done,
-    act: () => { bedroomDoor.locked = false; bedroomDoor.mesh.material = bedroomDoor.mats.doorMat; done(0, 'You found the key! The bedroom door is unlocked.'); },
-  });
+  // --- task 1: three hiding places; the key always turns up in the last one
+  const search = { count: 0, spots: {} };
+  const SEARCH_MSGS = [
+    'Nothing… just moth-eaten socks.',
+    'Empty. Dust and a dead spider. Where IS it?',
+    'THE KEY! It was here all along. The door is unlocked!',
+  ];
+  function addSearchSpot(id, prompt, c, r) {
+    makeItem(id, 0, c, r, {
+      invisible: true, keep: true,
+      prompt,
+      active: () => !T[0].done && !search.spots[id],
+      act: () => {
+        search.spots[id] = true;
+        search.count++;
+        game.audio.creak();
+        if (search.count >= 3) {
+          bedroomDoor.locked = false;
+          bedroomDoor.mesh.material = bedroomDoor.mats.doorMat;
+          done(0, SEARCH_MSGS[2]);
+        } else {
+          hud.toast(SEARCH_MSGS[search.count - 1]);
+        }
+      },
+    });
+  }
+  addSearchSpot('drawer', 'Search the dresser drawer', 1, 2);   // dresser furniture
+  addSearchSpot('cabinet', 'Search the cabinet', 6, 2);         // cabinet furniture
+  addSearchSpot('corner', 'Search the dark corner', 6, 4);      // clutter pile
+
   makeItem('Snack', 0x69a84f, 9, 3, {
     slot: 'cookie', kind: 'pickup', h: 0.5,
     prompt: 'Grab the snack', active: () => !T[1].done,
@@ -110,28 +143,55 @@ export function createTasks(game, scene) {
     act: () => done(4, 'An old key, deep in the trunk. That lap was worth it.'),
   });
   makeItem("Betty's Tray", 0xd884b0, 12, 1, {
-    slot: 'cookie_tray', kind: 'stand', h: 0.85, ph: 0.9, keep: true,
+    slot: 'cookie_tray', kind: 'stand', h: 0.85, ph: 0.9, baseY: 0.95, keep: true,   // on the counter
     prompt: 'Steal a cookie', active: () => !T[5].done,
-    act: () => { S.cookieStolen = true; done(5, "You stole a cookie! Betty will stop to count them later…"); },
+    act: () => {
+      S.cookieStolen = true;
+      game.betty.countT = 12;      // she'll come count them soon — your pin window
+      done(5, 'You stole a cookie! Betty will come back to COUNT them… watch for your chance.');
+    },
   });
+  // --- new task: she carries the pin, but sets it down beside her to count
+  // cookies; placePin() drops it wherever she stops, and only then is it real
+  makeItem('Rolling Pin', 0xa2703f, 13, 1, {
+    slot: 'rolling_pin', kind: 'pickup', h: 0.55, baseY: 0.3,
+    prompt: 'STEAL THE ROLLING PIN', active: () => !T[6].done && pinPlaced && game.betty.distracted > 0,
+    act: () => {
+      S.pinStolen = true;
+      game.setHeld();
+      done(6, 'You have her ROLLING PIN! She is going to be FURIOUS — but slower.');
+    },
+  });
+  let pinPlaced = false;
+  const pinItem = inter[inter.length - 1];
+  pinItem.dynamic = true;
+  pinItem.mesh.visible = false;
+  function placePin(pos) {
+    if (S.pinStolen) return;
+    pinPlaced = true;
+    pinItem.mesh.visible = true;
+    pinItem.mesh.position.set(pos.x + 0.8, 0, pos.z + 0.6);
+  }
   makeItem('Back Gate', 0x8a8a8a, 24, 19, {
     slot: 'back_gate', kind: 'wall', wall: [49, 0, southWallZ, Math.PI], h: 2.7, ph: 2.2, keep: true,
-    prompt: 'Unlock the back gate', active: () => !T[6].done,
-    act: () => { S.gateUnlocked = true; done(6, 'Back gate unlocked. Your escape route is ready.'); },
-  });
-  makeItem('Flashlight', 0xe8d84a, 3, 18, {
-    slot: 'flashlight', kind: 'pickup', h: 0.6,
-    prompt: 'Take the flashlight', active: () => !T[7].done,
-    act: () => { game.hasFlashlight = true; done(7, 'Flashlight! It switches on when the lights die.'); },
+    prompt: 'Unlock the back gate', active: () => !S.gateUnlocked,
+    act: () => {
+      S.gateUnlocked = true;
+      checkEscapeRoute('Back gate unlocked.');
+    },
   });
   const props = { a: false, b: false };
+  function checkEscapeRoute(prefix) {
+    if (S.gateUnlocked && props.a && props.b) done(7, 'Escape route ready: gate open, doors propped!');
+    else { hud.toast(prefix + ' Escape route: gate' + (S.gateUnlocked ? ' ✓' : '') + ', kitchen door' + (props.a ? ' ✓' : '') + ', garden door' + (props.b ? ' ✓' : '')); S.dirty = true; }
+  }
   makeItem('Wedge', 0x5a8a3a, 11, 6, {
     kind: 'stand', ph: 0.3, keep: true,
     prompt: 'Prop the kitchen door open', active: () => !props.a,
     act: () => {
       props.a = true; kitchenDoor.propped = true; kitchenDoor.mesh.material = kitchenDoor.mats.propMat;
       game.audio.creak();
-      if (props.b) done(8, 'Escape path propped open!'); else { hud.toast('Kitchen door propped. One more: the garden door.'); S.dirty = true; }
+      checkEscapeRoute('Kitchen door propped.');
     },
   });
   makeItem('Wedge', 0x5a8a3a, 24, 15, {
@@ -140,15 +200,24 @@ export function createTasks(game, scene) {
     act: () => {
       props.b = true; gardenDoor.propped = true; gardenDoor.mesh.material = gardenDoor.mats.propMat;
       game.audio.creak();
-      if (props.a) done(8, 'Escape path propped open!'); else { hud.toast('Garden door propped. One more: the kitchen door.'); S.dirty = true; }
+      checkEscapeRoute('Garden door propped.');
+    },
+  });
+  makeItem('Flashlight', 0xe8d84a, 3, 18, {
+    slot: 'flashlight', kind: 'pickup', h: 0.6,
+    prompt: 'Take the flashlight', active: () => !T[8].done,
+    act: () => {
+      game.hasFlashlight = true; game.setHeld();
+      done(8, 'Flashlight! It switches on when the lights die.');
     },
   });
   makeItem('KNIFE', 0xc8ccd4, 10, 1, {
-    slot: 'knife', kind: 'pickup', h: 1.0,
+    slot: 'knife', kind: 'pickup', h: 1.0, baseY: 0.4,   // hovers over the counter
     prompt: 'TAKE THE KNIFE', active: () => game.finale && !S.hasKnife,
     act: () => {
       S.hasKnife = true; S.dirty = true;
       game.player.speedMul = 1.1;
+      game.setHeld();
       game.audio.chime();
       hud.toast('YOU HAVE THE KNIFE — RUN! OUT THE BACK GATE!', 5000);
     },
@@ -176,9 +245,14 @@ export function createTasks(game, scene) {
     animT += dt;
     const p = game.player.pos;
 
-    // prop idle animation: pickups bob and spin, stands billboard
+    // she takes the pin back when she's done counting
+    if (pinPlaced && !S.pinStolen && game.betty.distracted <= 0) {
+      pinPlaced = false;
+      pinItem.mesh.visible = false;
+    }
+
     for (const it of inter) {
-      const u = it.mesh.userData;
+      const u = it.mesh?.userData;
       if (!u || !u.plane) continue;
       if (u.kind === 'pickup') {
         it.mesh.rotation.y += dt * 0.9;
@@ -189,12 +263,11 @@ export function createTasks(game, scene) {
       }
     }
 
-    // nearest active interactable or door in reach
     target = null;
     let bestD = REACH;
     for (const it of inter) {
       if (!it.active()) continue;
-      const { x, z } = MAP.cellToWorld(it.c, it.r);
+      const { x, z } = it.dynamic ? it.mesh.position : MAP.cellToWorld(it.c, it.r);
       const d = Math.hypot(p.x - x, p.z - z);
       if (d < bestD) { bestD = d; target = { prompt: it.prompt, act: () => useItem(it) }; }
     }
@@ -210,7 +283,6 @@ export function createTasks(game, scene) {
     }
     if (target) hud.showInteract(target.prompt); else hud.hideInteract();
 
-    // escaping through the gate wins
     if (game.finale && S.hasKnife && S.gateUnlocked &&
         Math.hypot(p.x - gatePos.x, p.z - gatePos.z) < 2.4) {
       T[9].done = true; S.dirty = true;
@@ -227,10 +299,10 @@ export function createTasks(game, scene) {
 
   function useItem(it) {
     it.act();
-    if (!it.keep) { scene.remove(it.mesh); it.active = () => false; }
+    if (!it.keep && it.mesh) { scene.remove(it.mesh); it.active = () => false; }
   }
 
   function tryInteract() { target?.act(); }
 
-  return { list: T, state: S, update, tryInteract, markDirty: () => { S.dirty = true; } };
+  return { list: T, state: S, update, tryInteract, placePin, markDirty: () => { S.dirty = true; } };
 }

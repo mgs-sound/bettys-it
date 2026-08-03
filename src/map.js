@@ -43,6 +43,44 @@ export const ROOMS = [
   { name: 'Garden Room',   c0: 16, r0: 17, c1: 27, r1: 19 },
 ];
 
+// Furniture: cell rects [c0, r0, c1, r1, height, color]. Boxes get precise
+// colliders for the player; their cells are blocked for Betty's pathfinding.
+// Placement rules: never on door-approach cells, task-item cells, or spawn.
+const FURNITURE = [
+  // Guest bedroom — bed, dresser (key spot), cabinet (key spot), corner pile (key spot)
+  [4, 1, 5, 1, 0.55, 0x6a4455, 'bed'],
+  [1, 2, 1, 2, 1.05, 0x5a4630, 'dresser'],
+  [6, 2, 6, 2, 1.6, 0x4a3a2a, 'cabinet'],
+  [6, 4, 6, 4, 0.45, 0x3a3430, 'clutter'],
+  // Kitchen — counters (props sit on them), table + chairs
+  [8, 1, 9, 1, 0.95, 0x6a5a4a], [10, 1, 10, 1, 0.95, 0x6a5a4a],
+  [12, 1, 12, 1, 0.95, 0x6a5a4a], [15, 1, 15, 1, 0.95, 0x6a5a4a],
+  [11, 3, 12, 3, 0.8, 0x6a4a2a], [10, 3, 10, 3, 0.5, 0x5a4630], [13, 3, 13, 3, 0.5, 0x5a4630],
+  // Dining room — long table, chairs, cabinet
+  [20, 2, 24, 2, 0.8, 0x6a4a2a],
+  [20, 1, 20, 1, 0.5, 0x5a4630], [22, 1, 22, 1, 0.5, 0x5a4630], [24, 1, 24, 1, 0.5, 0x5a4630],
+  [20, 3, 20, 3, 0.5, 0x5a4630], [22, 3, 22, 3, 0.5, 0x5a4630], [24, 3, 24, 3, 0.5, 0x5a4630],
+  [26, 2, 26, 2, 1.6, 0x4a3a2a],
+  // Library — shelves, reading table
+  [5, 9, 6, 9, 2.0, 0x4a3626], [10, 9, 10, 9, 2.0, 0x4a3626], [12, 9, 12, 9, 2.0, 0x4a3626],
+  [5, 12, 5, 12, 2.0, 0x4a3626], [11, 12, 12, 12, 2.0, 0x4a3626],
+  [9, 10, 10, 10, 0.8, 0x6a4a2a], [9, 11, 9, 11, 0.5, 0x5a4630],
+  // Attic stairs — sparse
+  [15, 9, 15, 9, 0.7, 0x5a4a3a], [15, 12, 15, 12, 1.6, 0x4a3626],
+  // Attic — crates and junk
+  [20, 9, 21, 9, 0.7, 0x5a4a3a], [24, 9, 24, 9, 1.6, 0x4a3626], [24, 12, 24, 12, 0.5, 0x3a3430],
+  // Basement — abandoned junk (item 5: sparse, broken)
+  [1, 17, 1, 17, 1.6, 0x3a3a42], [6, 19, 6, 19, 0.6, 0x44403a],
+  [1, 19, 1, 19, 0.4, 0x35322e], [6, 17, 6, 17, 0.5, 0x3a3a42],
+  // Entry hall — bench, side table, coat rack
+  [9, 19, 9, 19, 0.5, 0x5a4630], [8, 17, 8, 17, 0.9, 0x5a4630], [14, 17, 14, 17, 1.7, 0x4a3a2a],
+  // Garden room — planters
+  [17, 17, 17, 17, 0.6, 0x4a5a3a], [19, 19, 19, 19, 0.6, 0x4a5a3a],
+  [21, 17, 21, 17, 0.6, 0x4a5a3a], [26, 18, 26, 18, 0.6, 0x4a5a3a],
+];
+const obstacles = [];              // world-space AABBs for player collision
+const furnitureCells = new Set();  // Betty walks around furniture
+
 export function cellChar(c, r) {
   if (r < 0 || r >= H || c < 0 || c >= W) return '#';
   return GRID[r][c];
@@ -86,6 +124,11 @@ export function blockedCircle(x, z, rad) {
     const nz = Math.max(r * CELL, Math.min(z, (r + 1) * CELL));
     if ((x - nx) ** 2 + (z - nz) ** 2 < rad * rad) return true;
   }
+  for (const o of obstacles) {
+    const nx = Math.max(o.x0, Math.min(x, o.x1));
+    const nz = Math.max(o.z0, Math.min(z, o.z1));
+    if ((x - nx) ** 2 + (z - nz) ** 2 < rad * rad) return true;
+  }
   return false;
 }
 
@@ -111,6 +154,7 @@ export function losBlocked(ax, az, bx, bz) {
 export function passableForBetty(c, r) {
   const ch = cellChar(c, r);
   if (ch === '#') return false;
+  if (furnitureCells.has(c + ',' + r)) return false;
   if (ch === 'D') { const d = doorAt(c, r); return !d || d.openF > 0.5 || d.propped; }
   return true;
 }
@@ -186,9 +230,11 @@ export function buildMap(scene) {
     const ctr = cellToWorld((rm.c0 + rm.c1) / 2, (rm.r0 + rm.r1) / 2);
     label.position.set(ctr.x, 2.85, ctr.z);
     scene.add(label);
-    const lamp = new THREE.PointLight(0xffd9a0, 24, 17, 1.6);
+    // the basement is abandoned: colder, much dimmer than everywhere else
+    const cold = rm.name === 'Basement';
+    const lamp = new THREE.PointLight(cold ? 0x9ab8e0 : 0xffd9a0, cold ? 7 : 24, 17, 1.6);
     lamp.position.set(ctr.x, 2.7, ctr.z);
-    lamp.userData.base = 24;
+    lamp.userData.base = lamp.intensity;
     scene.add(lamp); lamps.push(lamp);
   }
   // hallway lamps
@@ -198,6 +244,21 @@ export function buildMap(scene) {
     lamp.position.set(x, 2.8, z);
     lamp.userData.base = 17;
     scene.add(lamp); lamps.push(lamp);
+  }
+
+  // furniture volumes: boxes with real colliders; Betty paths around their cells
+  obstacles.length = 0; furnitureCells.clear();
+  const INSET = 0.15;
+  for (const [c0, r0, c1, r1, fh, color] of FURNITURE) {
+    const x0 = c0 * CELL + INSET, x1 = (c1 + 1) * CELL - INSET;
+    const z0 = r0 * CELL + INSET, z1 = (r1 + 1) * CELL - INSET;
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(x1 - x0, fh, z1 - z0),
+      new THREE.MeshLambertMaterial({ color }));
+    box.position.set((x0 + x1) / 2, fh / 2, (z0 + z1) / 2);
+    scene.add(box);
+    obstacles.push({ x0, z0, x1, z1 });
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) furnitureCells.add(c + ',' + r);
   }
 
   // walls as one instanced mesh — skull wallpaper at ~2 world units per tile

@@ -84,6 +84,12 @@ export class GameAudio {
         return (2 * (s.p % 1) - 1) * 0.18 * Math.sin(Math.PI * t / 0.6);
       }),
       thud: synth(ctx, 0.3, (t) => Math.sin(2 * Math.PI * 70 * t) * Math.exp(-t * 20) * 0.9),
+      colddrone: synth(ctx, 4, (t, s) => {      // abandoned-basement air (seamless 4s loop)
+        const hum = Math.sin(2 * Math.PI * 55 * t) + Math.sin(2 * Math.PI * 56.25 * t);
+        s.n = ((s.n || 0) * 0.97) + (Math.random() * 2 - 1) * 0.03;
+        const breath = 0.5 + 0.5 * Math.sin(2 * Math.PI * 0.25 * t);
+        return hum * 0.16 + s.n * breath * 1.2;
+      }),
       alarm: synth(ctx, 1, (t) => (t % 0.5 < 0.12 ? Math.sign(Math.sin(2 * Math.PI * 900 * t)) * 0.12 : 0)),
     };
     // real files override synth versions when present
@@ -120,7 +126,24 @@ export class GameAudio {
     f.setTargetAtTime(target, this.ctx.currentTime, 0.15);
   }
 
-  scream() { if (this.screamSnd) { if (this.screamSnd.isPlaying) this.screamSnd.stop(); this.screamSnd.play(); } }
+  // angry = she noticed her rolling pin is GONE: deeper, meaner
+  scream(angry = false) {
+    if (!this.screamSnd) return;
+    if (this.screamSnd.isPlaying) this.screamSnd.stop();
+    this.screamSnd.setPlaybackRate(angry ? 0.76 : 1);
+    this.screamSnd.play();
+  }
+
+  // looping positional bed attached to any object (the basement's cold air)
+  attachDrone(obj) {
+    const a = new THREE.PositionalAudio(this.listener);
+    a.setBuffer(this.bufs.colddrone);
+    a.setRefDistance(3); a.setRolloffFactor(1.8);
+    a.setLoop(true); a.setVolume(0.6);
+    obj.add(a);
+    a.play();
+    this.drone = a;
+  }
 
   chaseLoop(on) {
     if (!this.chaseSnd) return;
@@ -192,7 +215,7 @@ export class GameAudio {
   }
 
   stopAll() {
-    for (const a of [this.rumble, this.chaseSnd, this.screamSnd, this.alarmSnd]) {
+    for (const a of [this.rumble, this.chaseSnd, this.screamSnd, this.alarmSnd, this.drone]) {
       try { if (a?.isPlaying) a.stop(); } catch { /* already stopped */ }
     }
     this.alarmSnd = null;

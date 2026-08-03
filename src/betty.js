@@ -1,15 +1,17 @@
 // Betty: roams the hallway ring, chases on sight (or forever once time is up),
 // grabs at close range. She can NEVER pass a closed door — closed doors are safe.
-// Rendered as a camera-facing plane; texture picked per-frame from the angle
-// between her facing direction and the camera (8 sectors, side art mirrors).
+// Rendered as one big camera-facing sprite (hand-drawn art via betty_roam slot;
+// chase pose reuses it with a forward tilt and a faster bob until its art lands).
+// Difficulty ramps with finished tasks: faster patrol, longer hearing.
 import * as THREE from 'three';
 import * as MAP from './map.js';
 import { TEX, makeCanvasTexture, bottomPadFraction } from './assets.js';
 
-const ROAM_SPEED = 2.0, CHASE_SPEED = 3.4;   // player is 4.2 — you win footraces
+const BASE_ROAM = 2.0, BASE_CHASE = 3.4;      // player is 4.2 — you win footraces
 const SEE_DIST = 13, GRAB_DIST = 1.55;
 const SPRITE_H = 2.4;
 const WAYPOINTS = [[4, 14], [54, 14], [54, 30], [4, 30]];   // hall ring corners
+const TRAY_CELL = { c: 12, r: 2 };            // where she stands to count cookies
 
 function placeholderFace(chasing) {
   return makeCanvasTexture(128, 192, (g) => {
@@ -38,9 +40,16 @@ export class Betty {
     this.pos = new THREE.Vector3(WAYPOINTS[2][0], 0, WAYPOINTS[2][1]);
     this.path = null; this.repath = 0; this.lost = 0;
     this.distracted = 0; this.finale = false;
-    this.facing = 0; this.animT = 0; this.captured = false;
+    this.bobT = 0; this.captured = false;
+    this.countT = 0; this.goingToCount = false; this.hearT = 0;
 
-    this.views = this.#buildViews();
+    const mk = (t) => t && { t, a: t.userData.aspect || 0.6, pad: bottomPadFraction(t) };
+    this.roamView = mk(TEX.betty_roam) || { t: placeholderFace(false), a: 128 / 192, pad: 0 };
+    // hand-drawn chase art when it lands; hand-drawn roam reused until then;
+    // on pure placeholders, at least switch to the jagged-mouth face
+    this.chaseView = mk(TEX.betty_chase)
+      || (TEX.betty_roam ? this.roamView : { t: placeholderFace(true), a: 128 / 192, pad: 0 });
+
     this.group = new THREE.Group();
     const geo = new THREE.PlaneGeometry(1, 1);
     geo.translate(0, 0.5, 0);                    // pivot at her feet
@@ -49,92 +58,45 @@ export class Betty {
       new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }),
     );
     this.group.add(this.sprite);
-    this.#setPose(this.views.front, false);
+    this.#setView(this.roamView);
     this.group.position.copy(this.pos);
     scene.add(this.group);
 
     audio.attachBetty(this.group);
   }
 
-  #buildViews() {
-    const get = (k) => TEX['betty_' + k];
-    const mk = (k) => {
-      const t = get(k);
-      if (!t) return null;
-      const m = t.clone();                     // horizontal mirror for left-facing sectors
-      m.repeat.x = -1; m.offset.x = 1; m.needsUpdate = true;
-      return { t, m, a: t.userData.aspect || 0.6, pad: bottomPadFraction(t) };
-    };
-    if (get('front')) {
-      const front = mk('front');
-      const back = mk('back') || front;
-      const walk1 = mk('walk1') || front, walk2 = mk('walk2') || walk1;
-      return {
-        front,
-        f34: mk('34front') || front,
-        side: mk('side') || front,
-        b34: mk('34back') || back,
-        back,
-        walk: [walk1, walk2],
-        idle: mk('idle') || front,
-        attack: mk('attack') || front,
-      };
-    }
-    // no art yet — canvas placeholders everywhere
-    const roam = { t: placeholderFace(false), a: 128 / 192, pad: 0 };
-    const chase = { t: placeholderFace(true), a: 128 / 192, pad: 0 };
-    roam.m = roam.t; chase.m = chase.t;
-    return { front: roam, f34: roam, side: roam, b34: roam, back: roam, walk: [chase, chase], idle: roam, attack: chase };
-  }
-
-  #setPose(entry, mirror) {
-    const map = mirror ? entry.m : entry.t;
+  #setView(v) {
     const mat = this.sprite.material;
-    if (mat.map !== map) { mat.map = map; mat.needsUpdate = true; }
-    this.sprite.scale.set(SPRITE_H * entry.a, SPRITE_H, 1);   // grows up from the feet pivot
-    this.sprite.position.y = -(entry.pad || 0) * SPRITE_H;    // cancel transparent padding below her shoes
-  }
-
-  // pick a directional view from the angle between facing and the camera
-  #directionalPose() {
-    const toCam = Math.atan2(this.camera.position.x - this.pos.x, this.camera.position.z - this.pos.z);
-    let rel = this.facing - toCam;
-    rel = ((rel + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
-    const s = Math.round(rel / (Math.PI / 4));
-    const v = this.views;
-    const entry = [v.front, v.f34, v.side, v.b34, v.back][Math.min(Math.abs(s), 4)];
-    return { entry, mirror: s > 0 };
+    if (mat.map !== v.t) { mat.map = v.t; mat.needsUpdate = true; }
+    // big: ~2.4 tall with an extra 1.1x width so she fills the hallway
+    this.sprite.scale.set(SPRITE_H * v.a * 1.1, SPRITE_H, 1);
+    this.view = v;
   }
 
   #updatePose(dt) {
-    this.animT += dt;
-    if (this.captured) return;                                  // attack pose is pinned
-    if (this.distracted > 0) { this.#setPose(this.views.idle, false); return; }
-    if (this.state === 'chase') {                               // she's coming right at you
-      this.#setPose(this.views.walk[Math.floor(this.animT * 4) % 2], false);
-      return;
-    }
-    const { entry, mirror } = this.#directionalPose();
-    this.#setPose(entry, mirror);
+    if (this.captured) return;                              // lunge pose is pinned
+    const chasing = this.state === 'chase' && this.distracted <= 0;
+    this.#setView(chasing ? this.chaseView : this.roamView);
+    this.bobT += dt * (chasing ? 9 : 4);
+    this.sprite.position.y = -(this.view.pad || 0) * SPRITE_H
+      + Math.abs(Math.sin(this.bobT)) * (chasing ? 0.12 : 0.05);
+    const tilt = chasing ? -0.13 : 0;                       // lean at you when hunting
+    this.sprite.rotation.x += (tilt - this.sprite.rotation.x) * Math.min(1, dt * 6);
   }
 
-  onCaptured(playerPos) {
+  onCaptured() {
     this.captured = true;
-    this.#setPose(this.views.attack, false);
-    if (TEX.effect_hit) {                                       // WHACK
-      const a = TEX.effect_hit.userData.aspect || 0.83;
-      const fx = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.5 * a, 1.5),
-        new THREE.MeshBasicMaterial({ map: TEX.effect_hit, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
-      fx.position.set(
-        (this.pos.x + playerPos.x) / 2, 1.45, (this.pos.z + playerPos.z) / 2);
-      fx.rotation.y = Math.atan2(playerPos.x - this.pos.x, playerPos.z - this.pos.z);
-      fx.renderOrder = 20;
-      this.scene.add(fx);
-    }
+    this.sprite.rotation.x = -0.28;                         // the lunge
+    this.sprite.scale.multiplyScalar(1.12);
   }
 
   cell() { return MAP.worldToCell(this.pos.x, this.pos.z); }
+
+  // ramped stats: +4% patrol speed per finished task, hearing radius grows
+  #done(game) { return game.doneCount(); }
+  roamSpeed(game) { return BASE_ROAM * (1 + 0.04 * this.#done(game)); }
+  chaseSpeed(game) { return (game.tasks.state.pinStolen ? BASE_CHASE - 0.25 : BASE_CHASE); }
+  hearRadius(game) { return 4 + 0.8 * this.#done(game); }
 
   canSee(game) {
     const p = game.player.pos;
@@ -145,18 +107,19 @@ export class Betty {
     return !MAP.losBlocked(this.pos.x, this.pos.z, p.x, p.z).blocked;
   }
 
-  startChase() {
+  startChase(game) {
     if (this.state === 'chase') return;
     this.state = 'chase';
     this.path = null; this.repath = 0; this.lost = 0;
-    this.audio.scream();
+    this.goingToCount = false;
+    // no rolling pin = angrier scream (deeper, meaner)
+    this.audio.scream(game?.tasks.state.pinStolen);
     this.audio.chaseLoop(true);
   }
 
   calmDown() {
     this.state = 'roam';
     this.audio.chaseLoop(false);
-    // BFS back to the nearest ring corner, then resume the loop
     let best = 0, bestD = Infinity;
     WAYPOINTS.forEach(([x, z], i) => {
       const d = (x - this.pos.x) ** 2 + (z - this.pos.z) ** 2;
@@ -167,7 +130,7 @@ export class Betty {
     this.path = MAP.findPath(me.c, me.r, t.c, t.r) || [];
   }
 
-  onFinale(cookieStolen, trayPos) {
+  onFinale(cookieStolen, trayPos, game) {
     this.finale = true;
     if (cookieStolen) {
       // She stops to count her cookies — right next to the knife. Head start!
@@ -175,8 +138,9 @@ export class Betty {
       this.pos.set(trayPos.x, 0, trayPos.z);
       this.path = null;
       this.audio.chaseLoop(false);
+      game.tasks.placePin(this.pos);            // last chance to grab the pin
     } else {
-      this.startChase();
+      this.startChase(game);
     }
   }
 
@@ -189,32 +153,61 @@ export class Betty {
     const step = Math.min(speed * dt, d);
     this.pos.x += (dx / d) * step;
     this.pos.z += (dz / d) * step;
-    this.facing = Math.atan2(dx, dz);
     return true;
   }
 
   update(dt, game) {
     const p = game.player.pos;
     const dist = Math.hypot(p.x - this.pos.x, p.z - this.pos.z);
+    const S = game.tasks.state;
 
     if (this.distracted > 0) {
       this.distracted -= dt;
-      if (this.distracted <= 0) this.startChase();
+      if (this.distracted <= 0) {
+        if (this.finale) this.startChase(game);
+        else this.calmDown();
+      }
     } else if (this.state === 'roam') {
+      // after the cookie theft she periodically returns to count her cookies —
+      // that's the window to steal the rolling pin. If the kitchen door is
+      // closed (she can't open doors, even her own) she counts just outside it.
+      if (S.cookieStolen && !S.pinStolen && !this.goingToCount) {
+        this.countT -= dt;
+        if (this.countT <= 0) {
+          const me = this.cell();
+          const path = MAP.findPath(me.c, me.r, TRAY_CELL.c, TRAY_CELL.r)
+            || MAP.findPath(me.c, me.r, 11, 6);
+          if (path) { this.path = path; this.goingToCount = true; }
+          this.countT = 30;
+        }
+      }
       if (this.path?.length) {
-        this.#follow(dt, ROAM_SPEED);                 // returning to the ring
+        this.#follow(dt, this.roamSpeed(game));
+      } else if (this.goingToCount) {
+        this.goingToCount = false;
+        this.distracted = 9;                    // counting… one, two, THREE?!
+        game.tasks.placePin(this.pos);          // she sets the pin down beside her
       } else {
         const [wx, wz] = WAYPOINTS[this.wp];
         const dx = wx - this.pos.x, dz = wz - this.pos.z;
         const d = Math.hypot(dx, dz);
         if (d < 0.4) this.wp = (this.wp + 1) % WAYPOINTS.length;
         else {
-          const step = Math.min(ROAM_SPEED * dt, d);
+          const step = Math.min(this.roamSpeed(game) * dt, d);
           this.pos.x += (dx / d) * step; this.pos.z += (dz / d) * step;
-          this.facing = Math.atan2(dx, dz);
         }
       }
-      if (this.finale || this.canSee(game)) this.startChase();
+      // hearing: your footsteps carry further the closer the finale gets
+      this.hearT -= dt;
+      if (this.hearT <= 0) {
+        this.hearT = 1.5;
+        if (game.player.moving && dist < this.hearRadius(game) && !this.goingToCount) {
+          const me = this.cell(), pc = MAP.worldToCell(p.x, p.z);
+          const path = MAP.findPath(me.c, me.r, pc.c, pc.r);
+          if (path) this.path = path;           // investigate the noise
+        }
+      }
+      if (this.finale || this.canSee(game)) this.startChase(game);
     } else if (this.state === 'chase') {
       this.repath -= dt;
       if (this.repath <= 0) {
@@ -227,11 +220,10 @@ export class Betty {
         if (!this.finale) { this.lost += dt; if (this.lost > 2.5) this.calmDown(); }
       } else {
         this.lost = 0;
-        if (!this.#follow(dt, CHASE_SPEED) && dist > 0.3) {
+        if (!this.#follow(dt, this.chaseSpeed(game)) && dist > 0.3) {
           // same cell as player — walk straight at them
-          this.pos.x += ((p.x - this.pos.x) / dist) * CHASE_SPEED * dt;
-          this.pos.z += ((p.z - this.pos.z) / dist) * CHASE_SPEED * dt;
-          this.facing = Math.atan2(p.x - this.pos.x, p.z - this.pos.z);
+          this.pos.x += ((p.x - this.pos.x) / dist) * this.chaseSpeed(game) * dt;
+          this.pos.z += ((p.z - this.pos.z) / dist) * this.chaseSpeed(game) * dt;
         }
         if (!this.finale) {
           const los = MAP.losBlocked(this.pos.x, this.pos.z, p.x, p.z);
